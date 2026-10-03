@@ -7,7 +7,7 @@ export interface Layout {
 }
 
 export interface Button {
-  /** Key in `input(n).buttons`. Must match /^[A-Za-z0-9_-]{1,16}$/ and be unique. */
+  /** Key in `input(n).buttons`. Must match /^[A-Za-z0-9_-]{1,16}$/, be unique and not be an Object.prototype name (e.g. 'constructor'). */
   id: string;
   /** Text on the button, at most 8 chars. Defaults to the id. */
   label?: string;
@@ -22,7 +22,7 @@ export interface PadPatch {
   title?: string;
   /** Accent color of the pad (hex). */
   color?: string;
-  /** Button ids that glow (e.g. "press A to start"). [] clears. */
+  /** Button ids that glow and make the phone vibrate briefly (Android only). Disabled wins over highlight. [] clears. */
   highlight?: string[];
   /** Button ids that cannot be pressed. [] clears. */
   disabled?: string[];
@@ -49,6 +49,8 @@ export interface HostEvents {
   leave: { slot: number; reason: LeaveReason };
   message: { slot: number; data: unknown };
   status: Status;
+  /** Server errors after host() resolved. 'replaced' (another tab resumed this room, e.g. a duplicated tab) also closes this room object. */
+  error: { code: string; message?: string };
 }
 
 export interface HostOptions {
@@ -80,9 +82,15 @@ export interface Room {
   broadcast(data: unknown): void;
   /** Returns a function that removes the listener. */
   on<E extends keyof HostEvents>(event: E, fn: (arg: HostEvents[E]) => void): () => void;
-  /** Disconnect and forget the room (it is dropped by the server 60 s later). */
+  /** Disconnect and forget the room (the server drops it 60 s later). */
   close(): void;
 }
 
-/** Create (or, after a page refresh, resume) a room. Rejects if the server is unreachable or rejects the layout. */
+/**
+ * Create a room, or resume the one stored in sessionStorage (same server and
+ * slot count) after a page reload. Resuming resets every pad's state (title,
+ * color, highlight, disabled). Pads already connected are visible through
+ * connected(n) when this resolves; no 'join' event is emitted for them.
+ * Rejects if the server is unreachable or refuses the options.
+ */
 export function host(options?: HostOptions): Promise<Room>;
