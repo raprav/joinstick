@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Joinstick basic example</title>
+<link rel="icon" href="data:,">
+<style>
+  body { margin: 0; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 16px;
+         background: #101218; color: #e8eaf0; font: 16px system-ui, sans-serif; }
+  h1 { margin: 0; font-size: 22px; }
+  canvas { max-width: 100%; border-radius: 12px; background: #1a1d26; }
+  .players { display: flex; flex-wrap: wrap; justify-content: center; gap: 24px; }
+  .player { padding: 12px; border-top: 4px solid var(--c); border-radius: 12px; background: #1a1d26; text-align: center; }
+  .player img { display: block; width: 160px; height: 160px; margin-bottom: 8px; border-radius: 8px; }
+  .player.on img { opacity: 0.2; }
+  .player code { display: block; margin-top: 4px; color: #8a90a2; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>Room <span id="code">····</span> <small id="status"></small></h1>
+<canvas id="game" width="640" height="360"></canvas>
+<div class="players" id="players"></div>
+
+<script type="module">
+import { host } from '/joinstick/host.js';
+
+const COLORS = ['#e5484d', '#3e9bff'];
+const room = await host({
+  slots: 2,
+  layout: {
+    stick: 'dpad',
+    buttons: [
+      { id: 'dash', label: 'DASH', color: '#f5a524', size: 'large' },
+      { id: 'grow', label: 'GROW', color: '#30a46c' },
+    ],
+  },
+});
+document.getElementById('code').textContent = room.code;
+room.on('status', (s) => (document.getElementById('status').textContent = s === 'connected' ? '' : `(${s})`));
+
+// One card per slot: QR + the same URL as text for people who type it.
+const players = COLORS.map((color, i) => {
+  const n = i + 1;
+  const card = document.createElement('div');
+  card.className = 'player';
+  card.style.setProperty('--c', color);
+  const img = document.createElement('img');
+  img.src = room.qr(n);
+  img.alt = `QR code for player ${n}`;
+  const label = document.createElement('div');
+  const url = document.createElement('code');
+  url.textContent = room.joinUrl(n);
+  card.append(img, label, url);
+  document.getElementById('players').append(card);
+  return { n, color, card, label, x: 140 + i * 360, y: 180, size: 30 };
+});
+
+function refresh() {
+  for (const p of players) {
+    const on = room.connected(p.n);
+    p.card.classList.toggle('on', on);
+    p.label.textContent = on ? `Player ${p.n} connected` : `Player ${p.n}: scan to join`;
+  }
+}
+room.on('join', ({ slot }) => {
+  room.pad(slot, { title: `Player ${slot}`, color: COLORS[slot - 1] });
+  refresh();
+});
+room.on('leave', refresh);
+refresh();
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+function frame() {
+  const missing = players.filter((p) => !room.connected(p.n));
+  for (const p of players) {
+    const input = room.input(p.n); // poll once per frame
+    if (missing.length) continue; // paused until every slot is back
+    const speed = input.buttons.dash ? 9 : 4; // held state: fine for movement
+    p.x = Math.max(p.size, Math.min(canvas.width - p.size, p.x + input.x * speed));
+    p.y = Math.max(p.size, Math.min(canvas.height - p.size, p.y + input.y * speed));
+    if (input.pressed.grow) p.size = p.size === 30 ? 50 : 30; // one-shot: use pressed
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const p of players) {
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size, p.y - p.size, p.size * 2, p.size * 2);
+  }
+  if (missing.length) {
+    ctx.fillStyle = '#101218cc';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#e8eaf0';
+    ctx.font = '600 24px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Paused: waiting for ${missing.map((p) => `P${p.n}`).join(' and ')}`, canvas.width / 2, canvas.height / 2);
+  }
+  requestAnimationFrame(frame);
+}
+frame();
+</script>
+</body>
+</html>
