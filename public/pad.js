@@ -101,6 +101,7 @@ function play(pad) {
     const key = JSON.stringify(pad.layout);
     if (key === layoutKey) return;
     layoutKey = key;
+    geo = null;
     const { stick: kind, buttons: list } = pad.layout;
     stickEl.hidden = kind === 'none';
     const box = $('buttons');
@@ -127,7 +128,7 @@ function play(pad) {
     const glow = new Set(state.highlight ?? []);
     disabled = new Set(state.disabled ?? []);
     for (const [id, el] of buttons) {
-      el.classList.toggle('glow', glow.has(id));
+      el.classList.toggle('glow', glow.has(id) && !disabled.has(id)); // disabled wins
       el.classList.toggle('off', disabled.has(id));
     }
     if (patch.vibrate) navigator.vibrate?.(patch.vibrate);
@@ -241,7 +242,11 @@ function play(pad) {
     });
   }
 
-  pad.on('pad', applyState);
+  // A resumed host may send a new layout (as a fresh 'joined') with the pad state.
+  pad.on('pad', (state, patch) => {
+    render();
+    applyState(state, patch);
+  });
   pad.on('error', (err) => showError(err, pad.room, pad.slot));
   pad.on('status', (s) => {
     if (s === 'reconnecting') screen('Reconnecting…', 'Getting back into the game.');
