@@ -1,6 +1,6 @@
 import os from 'node:os';
 
-const VIRTUAL = /^(docker|br-|veth|utun|bridge|vboxnet)/;
+const VIRTUAL = /^(docker|br-|veth|virbr|vmnet|vboxnet|utun|tun|tap|wg|zt|bridge|vethernet|virtualbox|vmware|hyper-v)/i;
 
 // Prefer typical home/office ranges: 192.168/16, then 10/8, then 172.16/12.
 function rank(ip) {
