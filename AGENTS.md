@@ -118,7 +118,8 @@ makes `host()` reject with `code: 'bad-message'` and a message saying why.
 
 - `id`: `/^[A-Za-z0-9_-]{1,16}$/`, unique, and not an `Object.prototype`
   name (`constructor`, `toString`, `__proto__`...). It is the key in `buttons`/`pressed`.
-- `label`: ≤ 8 chars (defaults to the id). `color`: `/^#[0-9a-f]{3,8}$/i`.
+- `label`: ≤ 8 chars (defaults to the id); the pad shrinks long labels to fit
+  the round button, so short labels read best. `color`: `/^#[0-9a-f]{3,8}$/i`.
 - `size`: `'large'` or omitted.
 - Works in portrait and landscape (the pad page adapts; iOS cannot lock orientation).
 
