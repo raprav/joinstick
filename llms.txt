@@ -1,0 +1,80 @@
+# Joinstick
+
+> Turn phones into gamepads for browser games. The game page (host) shows one QR code per player slot; scanning it opens a controller page on the phone. Self-hosted Node server (`npx joinstick`), plain ESM browser SDKs, JSON over WebSocket.
+
+Full guide: AGENTS.md. Wire format: PROTOCOL.md. Types: /joinstick/host.d.ts, /joinstick/client.d.ts (all in the npm package and at https://github.com/raprav/joinstick).
+
+## Run
+
+`npx joinstick --static ./my-game` serves the game and Joinstick on http://localhost:3000. Phones must be on the same Wi-Fi. Flags: `--port` (PORT, default 3000), `--static <dir>`, `--public-url <url>` (PUBLIC_URL; base URL phones open, for tunnels/Docker/proxies).
+
+## Integrate
+
+```js
+import { host } from '/joinstick/host.js';
+const room = await host({ slots: 2, layout: { stick: 'dpad', buttons: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }] } });
+// show <img src={room.qr(n)}> and the text room.joinUrl(n) for n = 1..room.slots
+function tick() {
+  for (let n = 1; n <= room.slots; n++) {
+    const { x, y, buttons, pressed } = room.input(n); // once per frame per slot
+  }
+  requestAnimationFrame(tick);
+}
+tick();
+```
+
+If host.js is bundled or the game is served from another origin: `import { host } from 'joinstick/host'` and pass `server: 'http://<host>:3000'`.
+
+## Input contract
+
+- Slots are 1-based. `room.input(0)` throws RangeError.
+- `room.input(n)` is never undefined: `{ x, y, buttons, pressed }`. Neutral when the slot is empty, after leave and after join.
+- `x`: -1 left .. 1 right. `y`: -1 up .. 1 down. The d-pad gives -1/0/1 (8-way; up needs the thumb clearly above horizontal).
+- `buttons`: held state of every layout button. Use for movement, block, charge.
+- `pressed`: buttons that went down since the previous `input(n)` call, latched and cleared on read. Use for attacks, jumps, confirm. Never use held state to trigger one-shot actions.
+- No input events: polling is the only way to read input.
+
+## Pause recipe
+
+```js
+room.on('leave', ({ slot, reason }) => pause(slot)); // reason: left | disconnected | timeout | kicked
+room.on('join', ({ slot, name, rejoin }) => maybeResume());
+const paused = ![1, 2].every((n) => room.connected(n));
+```
+
+A locked/backgrounded phone leaves immediately and rejoins its slot when back. Page refresh and server restart are transparent (same room code, phones rejoin).
+
+## Layout
+
+`{ stick: 'dpad' | 'none', buttons: [{ id, label?, color?, size?: 'large' }] }`, max 8 buttons. id `/^[A-Za-z0-9_-]{1,16}$/` unique; label ≤ 8 chars; color `/^#[0-9a-f]{3,8}$/i`. Default: d-pad + a, b. Invalid layout → host() rejects with code 'bad-message'.
+
+## Host API
+
+room.code, room.slots, room.status ('connecting'|'connected'|'reconnecting'|'closed'), room.input(n), room.connected(n), room.qr(n), room.joinUrl(n), room.pad(n, { title?, color?, highlight?: ids, disabled?: ids, vibrate?: ms }), room.kick(n), room.send(n, data), room.broadcast(data), room.on('join'|'leave'|'message'|'status', fn) → unsubscribe, room.close().
+
+## Client API (custom controllers, remote players)
+
+```js
+import { join } from '/joinstick/client.js';
+const pad = await join({ room: 'KQZX', slot: 1, name: 'Ana' }); // slot omitted = first free
+pad.setInput({ x, y, buttons: { a: true } }); pad.send(data); pad.on('message'|'pad'|'error'|'status', fn); pad.leave();
+```
+
+## Error codes
+
+room-not-found, slot-taken (with free: [slots]), bad-slot, bad-message (with message), replaced, kicked, room-closed (host gone 60 s), version, server-full; client-only: unreachable.
+
+## Pitfalls
+
+- First run: allow Node through the OS firewall prompt.
+- Guest/hotel Wi-Fi with client isolation blocks phones: use a hotspot or a tunnel.
+- Plain HTTP: vibrate works only on Android, no wake lock, no iOS fullscreen.
+- An HTTPS game page cannot reach a ws:// LAN server (mixed content): serve the game with --static or put both behind HTTPS.
+- Docker breaks LAN IP detection: use --public-url.
+- Remote play: `cloudflared tunnel --url http://localhost:3000`, then `npx joinstick --public-url https://<name>.trycloudflare.com`.
+
+## Don't
+
+- Don't use innerHTML with player names or network data; use textContent.
+- Don't read held state for one-shot actions; use pressed.
+- Don't call input(n) twice per frame for the same slot.
