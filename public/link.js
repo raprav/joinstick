@@ -12,6 +12,7 @@ export function link(url, { open, message, down }) {
 
   function connect() {
     clearTimeout(retryTimer);
+    detach(); // never two sockets at once
     lastMsg = Date.now();
     ws = new WebSocket(url);
     ws.onopen = open;
@@ -30,16 +31,21 @@ export function link(url, { open, message, down }) {
     ws.onclose = ws.onerror = () => drop();
   }
 
-  // Close the socket right away (a dead connection can take long to report
-  // 'close') and tell the owner it is down.
-  function drop(code) {
-    if (!ws) return;
+  function detach(code) {
+    if (!ws) return false;
     ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null;
     try {
       ws.close(code);
     } catch {}
     ws = null;
-    if (!stopped) down();
+    return true;
+  }
+
+  // Close the socket right away (a dead connection can take long to report
+  // 'close') and tell the owner it is down. Also cancels a pending retry.
+  function drop(code) {
+    clearTimeout(retryTimer);
+    if (detach(code) && !stopped) down();
   }
 
   function send(m) {
