@@ -95,6 +95,7 @@ function play(pad) {
   $('screen').hidden = true;
   $('code').textContent = pad.room;
   $('slot').textContent = `P${pad.slot}`;
+  $('hero').textContent = `P${pad.slot}`;
 
   function render() {
     const key = JSON.stringify(pad.layout);
@@ -114,6 +115,7 @@ function play(pad) {
       buttons.set(b.id, el);
     });
     box.style.setProperty('--cols', list.length === 1 ? 1 : 2);
+    box.style.setProperty('--wide', Math.ceil(list.length / 2)); // landscape: two rows
     box.classList.toggle('many', list.length > 4);
     release();
     applyState(pad.state, {});

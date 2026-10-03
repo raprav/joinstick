@@ -96,11 +96,22 @@ body { position: fixed; inset: 0; }
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px max(20px, env(safe-area-inset-right)) 16px max(24px, env(safe-area-inset-left));
+  padding: 16px max(28px, env(safe-area-inset-right)) 16px max(24px, env(safe-area-inset-left));
 }
 .controls:has(.dpad[hidden]) { justify-content: center; }
+/* Portrait has spare room above the thumbs: show who you are, big. */
+.hero {
+  display: none;
+  flex: 1;
+  place-items: center;
+  color: color-mix(in srgb, var(--accent) 30%, transparent);
+  font-size: 34vmin;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
 @media (orientation: portrait) {
-  .controls { align-items: flex-end; padding-bottom: max(12vh, 24px); }
+  .hero { display: grid; }
+  .controls { flex: none; padding-bottom: max(10vh, 24px); }
 }
 
 .dpad {
@@ -133,7 +144,9 @@ body { position: fixed; inset: 0; }
 /* Stagger columns like an arcade panel. */
 .buttons .btn:nth-child(odd) { margin-top: calc(var(--btn) * 0.35); }
 @media (orientation: landscape) {
-  .buttons.many { grid-template-columns: repeat(4, var(--btn)); }
+  :root { --dpad: min(48vmin, 230px); --btn: min(23vmin, 100px); }
+  .buttons.many { grid-template-columns: repeat(var(--wide), var(--btn)); --btn: min(20vmin, 88px); }
+  .buttons.many .btn { margin-top: 0; }
 }
 
 .btn {
