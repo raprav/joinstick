@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import net from 'node:net';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { attach } from '../src/server.js';
 import { host } from '../public/host.js';
 import { join } from '../public/client.js';
@@ -8,13 +12,26 @@ import { join } from '../public/client.js';
 const T1 = 'token-one-aaaaaaaaaaaa';
 const T2 = 'token-two-bbbbbbbbbbbb';
 
+// Same sessionStorage on every Node version; a second host() call with it
+// behaves like the game page being reloaded.
+const session = new Map();
+Object.defineProperty(globalThis, 'sessionStorage', {
+  configurable: true,
+  value: { getItem: (k) => session.get(k) ?? null, setItem: (k, v) => session.set(k, v), removeItem: (k) => session.delete(k) },
+});
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function start({ port = 0, handler, ...opts } = {}) {
   const server = http.createServer(handler);
+  const sockets = [];
+  server.on('connection', (s) => sockets.push(s));
   const js = attach(server, opts);
   await new Promise((resolve) => server.listen(port, '127.0.0.1', resolve));
   port = server.address().port;
   return {
     port,
+    sockets,
     url: `http://127.0.0.1:${port}`,
     async stop() {
       js.close();
@@ -365,5 +382,149 @@ test('http routes: SDKs, pad page, QR, llms.txt, static files, fallback handler'
   assert.equal(await (await get('/joinstick/qr.svg?room=ZZZZ&slot=1')).text(), 'app');
   assert.equal(await (await get('/..%2fpackage.json')).text(), 'app');
   assert.equal(await (await get('/%2e%2e/package.json')).text(), 'app');
+  await srv.stop();
+});
+
+test('malformed upgrade URLs do not crash the server; dotfiles are never served', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'joinstick-'));
+  fs.writeFileSync(path.join(dir, '.env'), 'SECRET=1');
+  fs.mkdirSync(path.join(dir, '.git'));
+  fs.writeFileSync(path.join(dir, '.git', 'config'), '[core]');
+  fs.writeFileSync(path.join(dir, 'index.html'), '<html>');
+  const srv = await start({ static: dir });
+
+  for (const target of ['//[', 'http://[']) {
+    const s = net.connect(srv.port, '127.0.0.1', () =>
+      s.write(`GET ${target} HTTP/1.1\r\nHost: x\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n`),
+    );
+    s.on('error', () => {});
+    await sleep(50);
+    s.destroy();
+  }
+  for (const p of ['/.env', '/.git/config', '/%2eenv']) assert.equal((await fetch(srv.url + p)).status, 404, p);
+  assert.equal((await fetch(srv.url + '/')).status, 200);
+  await srv.stop();
+});
+
+test('button ids that are Object.prototype names are rejected', async () => {
+  const srv = await start();
+  for (const id of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+    const h = sock(srv.url);
+    h.send(`{"t":"create","v":1,"layout":{"buttons":[{"id":"${id}"}]}}`);
+    assert.match((await h.next()).message, /reserved|button id/, id);
+  }
+  const { created } = await createRoom(srv.url);
+  const { p } = await joinPad(srv.url, created.room, 1, T1);
+  p.send('{"t":"input","x":0,"y":0,"b":{"__proto__":true}}');
+  assert.equal((await p.next()).code, 'bad-message');
+  await srv.stop();
+});
+
+test('a reloaded game with a different slot count gets a fresh room instead of hanging', async () => {
+  session.clear();
+  const srv = await start();
+  const four = await host({ server: srv.url, slots: 4 });
+  const pad = await join({ server: srv.url, room: four.code, slot: 4 });
+  const two = await Promise.race([host({ server: srv.url, slots: 2 }), sleep(1500).then(() => 'pending')]);
+  assert.notEqual(two, 'pending');
+  assert.notEqual(two.code, four.code);
+  assert.equal(two.slots, 2);
+  assert.equal(two.connected(2), false);
+
+  // The server never resumes a room with another slot count either.
+  const h = sock(srv.url);
+  const stored = JSON.parse(session.get('joinstick:host'));
+  h.send({ t: 'create', v: 1, slots: 3, room: stored.room, hostToken: stored.hostToken });
+  assert.notEqual((await h.next()).room, stored.room);
+  pad.leave();
+  four.close();
+  two.close();
+  await srv.stop();
+});
+
+test('a phone locked while a reconnect is pending comes back with one socket', async () => {
+  session.clear();
+  const srv = await start();
+  const docListeners = {};
+  const doc = { hidden: false, addEventListener: (e, fn) => (docListeners[e] ??= []).push(fn) };
+  globalThis.document = doc;
+  globalThis.addEventListener = () => {};
+  const room = await host({ server: srv.url });
+  const pad = await join({ server: srv.url, room: room.code, slot: 1 });
+  const errors = [];
+  pad.on('error', (e) => errors.push(e.code));
+  await until(() => room.connected(1));
+
+  srv.sockets.at(-1).destroy(); // network blip on the pad
+  await until(() => pad.status === 'reconnecting');
+  doc.hidden = true;
+  docListeners.visibilitychange.forEach((fn) => fn()); // locked while the retry is pending
+  await sleep(600);
+  assert.equal(room.connected(1), false);
+  doc.hidden = false;
+  docListeners.visibilitychange.forEach((fn) => fn());
+  await until(() => pad.status === 'connected' && room.connected(1));
+  await sleep(300);
+  assert.deepEqual(errors, []);
+  assert.equal(pad.status, 'connected');
+  pad.leave();
+  room.close();
+  delete globalThis.document;
+  delete globalThis.addEventListener;
+  await srv.stop();
+});
+
+test('game reload: held input survives, pad state resets, the old tab is told it was replaced', async () => {
+  session.clear();
+  const srv = await start();
+  const layout = { buttons: [{ id: 'a' }, { id: 'b' }] };
+  const first = await host({ server: srv.url, layout });
+  const firstErrors = [];
+  first.on('error', (e) => firstErrors.push(e.code));
+  const pad = await join({ server: srv.url, room: first.code, slot: 1 });
+  const padSocket = srv.sockets.at(-1);
+  await until(() => first.connected(1));
+  first.pad(1, { title: 'Ryu', highlight: ['a'] });
+  pad.setInput({ x: 1, buttons: { a: true } });
+  await until(() => first.input(1).x === 1 && pad.state.title === 'Ryu');
+
+  // Same sessionStorage, new host() call = the game page was reloaded.
+  const second = await host({ server: srv.url, layout });
+  const hostSocket = srv.sockets.at(-1);
+  assert.equal(second.code, first.code);
+  assert.equal(second.connected(1), true, 'pads already connected are visible when host() resolves');
+  await sleep(200); // read once: polling would consume "pressed"
+  assert.deepEqual(second.input(1), { x: 1, y: 0, buttons: { a: true, b: false }, pressed: {} });
+  await until(() => pad.state.title === undefined);
+  assert.deepEqual(pad.state, {});
+  await until(() => first.status === 'closed');
+  assert.deepEqual(firstErrors, ['replaced']);
+
+  // An in-session reconnect keeps pad state.
+  second.pad(1, { title: 'Ken' });
+  await until(() => pad.state.title === 'Ken');
+  hostSocket.destroy();
+  await until(() => second.status === 'reconnecting');
+  await until(() => second.status === 'connected');
+  await sleep(200);
+  assert.equal(pad.state.title, 'Ken');
+  assert.deepEqual(second.input(1), { x: 1, y: 0, buttons: { a: true, b: false }, pressed: {} });
+
+  // A button held through a pad rejoin is not a new press.
+  padSocket.destroy();
+  await until(() => pad.status === 'reconnecting');
+  await until(() => pad.status === 'connected');
+  await sleep(200);
+  assert.deepEqual(second.input(1), { x: 1, y: 0, buttons: { a: true, b: false }, pressed: {} });
+  pad.leave();
+  second.close();
+  await srv.stop();
+});
+
+test('one address cannot create more than 20 rooms', async () => {
+  const srv = await start();
+  for (let i = 0; i < 20; i++) assert.equal((await createRoom(srv.url)).created.t, 'created');
+  const last = await createRoom(srv.url);
+  assert.deepEqual(last.created, { t: 'error', code: 'server-full' });
   await srv.stop();
 });
