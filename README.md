@@ -7,11 +7,15 @@ one small self-hosted Node server.
 Made for couch play on a laptop or TV, with a plain JSON/WebSocket protocol
 that also works for remote players.
 
+<p align="center"><img src="docs/pad-portrait.png" alt="The default pad page on a phone: d-pad on the left, colored buttons on the right" width="280"></p>
+
 ## Quick start (30 seconds)
+
+Joinstick is not on npm yet, so run it from a clone (Node 22+):
 
 ```sh
 git clone https://github.com/raprav/joinstick && cd joinstick && npm install
-node src/cli.js --static examples/basic      # or, once published: npx joinstick --static examples/basic
+node src/cli.js --static examples/basic
 ```
 
 Open `http://localhost:3000` on the computer, scan a QR code with a phone on
@@ -20,7 +24,8 @@ the same Wi-Fi, and move the square.
 ## Add it to your game
 
 ```sh
-npx joinstick --static ./my-game
+node path/to/joinstick/src/cli.js --static ./my-game
+# or: npm i <git url or path to the checkout>, then npx joinstick --static ./my-game
 ```
 
 ```js
@@ -30,18 +35,19 @@ const room = await host({ slots: 2, layout: { buttons: [{ id: 'punch', label: 'P
 qrImage1.src = room.qr(1);  qrText1.textContent = room.joinUrl(1);
 
 function frame() {
-  const p1 = room.input(1);                      // { x, y, buttons, pressed }, never undefined
-  if (!room.connected(1)) showPaused();
+  requestAnimationFrame(frame);
+  const p1 = room.input(1);                      // read every frame, even while paused
+  if (!room.connected(1)) return showPaused();   // { x, y, buttons, pressed } is never undefined
   player1.move(p1.x, p1.y);                      // x, y in [-1, 1], y = -1 is up
   if (p1.pressed.punch) player1.punch();         // pressed = went down since last read
-  requestAnimationFrame(frame);
 }
 frame();
 ```
 
 Coding agents (and humans who like checklists): read [AGENTS.md](AGENTS.md).
 It has the full API, the input contract, layouts, pad customization, error
-codes and pitfalls. A running server also serves it condensed at `/llms.txt`.
+codes, pitfalls and how to test without phones (drive pads from a script
+with `/joinstick/client.js`). A running server also serves it condensed at `/llms.txt`.
 
 ## CLI
 
@@ -53,7 +59,7 @@ joinstick [--port 3000] [--static ./dir] [--public-url URL]
 |---|---|---|
 | `--port` | `PORT` | Port to listen on. Default 3000. |
 | `--static <dir>` | | Also serve your game from this directory. |
-| `--public-url <url>` | `PUBLIC_URL` | Base URL phones should open. Default: the detected LAN address. |
+| `--public-url <url>` | `PUBLIC_URL` | Base URL phones should open, as an origin without a path. Default: the detected LAN address. |
 
 Or embed it in your own Node server with `import { attach } from 'joinstick'`
 (see AGENTS.md).
@@ -90,8 +96,11 @@ remote clients use `/joinstick/client.js`.
 
   ```sh
   cloudflared tunnel --url http://localhost:3000
-  npx joinstick --static ./my-game --public-url https://<name>.trycloudflare.com
+  node src/cli.js --static ./my-game --public-url https://<name>.trycloudflare.com
   ```
+
+- Room codes are 4 letters, so on a public URL they can be guessed. Fine for
+  playing with friends; there is no other authentication.
 
 - A game served over HTTPS cannot talk to a `ws://` server (mixed content):
   serve the game with `--static`, or put both behind HTTPS.
