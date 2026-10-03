@@ -110,7 +110,9 @@ function play(pad) {
     list.forEach((b, i) => {
       const el = document.createElement('div');
       el.className = b.size === 'large' ? 'btn large' : 'btn';
-      el.textContent = b.label; // layout comes from the host: text only, never HTML
+      const text = document.createElement('span');
+      text.textContent = b.label; // layout comes from the host: text only, never HTML
+      el.append(text);
       el.style.setProperty('--c', COLOR.test(b.color ?? '') ? b.color : PALETTE[i % PALETTE.length]);
       box.append(el);
       buttons.set(b.id, el);
@@ -119,7 +121,19 @@ function play(pad) {
     box.style.setProperty('--wide', Math.ceil(list.length / 2)); // landscape: two rows
     box.classList.toggle('many', list.length > 4);
     release();
+    fitLabels();
     applyState(pad.state, {});
+  }
+
+  // Shrink each label until it fits inside its round button (labels are ≤ 8 chars).
+  function fitLabels() {
+    for (const el of buttons.values()) {
+      const text = el.firstChild;
+      if (!el.clientWidth) continue; // hidden: fitted again on the next render/resize
+      el.style.fontSize = '';
+      let size = parseFloat(getComputedStyle(el).fontSize);
+      while (text.offsetWidth > el.clientWidth * 0.78 && size > 9) el.style.fontSize = `${--size}px`;
+    }
   }
 
   function applyState(state, patch) {
@@ -216,6 +230,7 @@ function play(pad) {
   addEventListener('resize', () => {
     geo = null;
     release();
+    fitLabels();
   });
   addEventListener('blur', release);
   addEventListener('pagehide', release);
