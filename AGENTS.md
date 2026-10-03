@@ -164,6 +164,9 @@ attach(server, { static: './dist', publicUrl: process.env.PUBLIC_URL });
 server.listen(3000);
 ```
 
+Append `?name=Ana` to a join URL to give the player a name (shown to the host
+in the `join` event).
+
 Routes: WebSocket `/joinstick/ws`; SDKs `/joinstick/host.js`,
 `/joinstick/client.js` (CORS `*`); pad page `/j` and `/j/ROOM/SLOT`; QR
 `/joinstick/qr.svg?room=&slot=` (existing rooms only); `/llms.txt`.
