@@ -19,7 +19,8 @@ export function host({ slots = 2, layout, server } = {}) {
   try {
     saved = JSON.parse(store?.getItem(STORE_KEY) ?? 'null');
   } catch {}
-  if (saved?.server !== base) saved = null;
+  // A stored room is resumed only by the same server and slot count.
+  if (saved?.server !== base || saved?.slots !== slots) saved = null;
 
   let code = saved?.room ?? null;
   let hostToken = saved?.hostToken ?? null;
@@ -27,9 +28,10 @@ export function host({ slots = 2, layout, server } = {}) {
   let buttonIds = [];
   let status = 'connecting';
   let ready = false;
+  let resumedOnce = false;
   const listeners = {};
   const padState = {};
-  const state = Array.from({ length: slots }, () => ({ connected: false, name: '', x: 0, y: 0, buttons: {}, pressed: {} }));
+  const state = Array.from({ length: slots }, () => ({ connected: false, name: '', x: 0, y: 0, buttons: {}, pressed: {}, baseline: true }));
 
   function emit(ev, arg) {
     for (const fn of listeners[ev] ?? []) {
@@ -55,6 +57,7 @@ export function host({ slots = 2, layout, server } = {}) {
     s.y = 0;
     s.buttons = Object.fromEntries(buttonIds.map((id) => [id, false]));
     s.pressed = {};
+    s.baseline = true; // the next input sets held state without "pressed" edges
   }
 
   function leave(n, reason) {
@@ -75,7 +78,9 @@ export function host({ slots = 2, layout, server } = {}) {
 
   return new Promise((resolve, reject) => {
     const conn = link(base.replace(/^http/, 'ws') + '/joinstick/ws', {
-      open: () => conn.send({ t: 'create', v: 1, slots, layout, room: code, hostToken }),
+      // The first create of this host() call resets pad state: a reloaded game
+      // starts from scratch, while in-session reconnects keep it.
+      open: () => conn.send({ t: 'create', v: 1, slots, layout, room: code, hostToken, resetPads: !resumedOnce }),
       down() {
         for (let n = 1; n <= slots; n++) leave(n, 'disconnected');
         if (!ready) return fail(new Error(`Cannot reach the Joinstick server at ${base}`));
@@ -83,44 +88,56 @@ export function host({ slots = 2, layout, server } = {}) {
         conn.retry();
       },
       message(m) {
-        if (m.t === 'created') {
-          code = m.room;
-          hostToken = m.hostToken;
-          joinBase = m.joinBase;
-          buttonIds = m.layout.buttons.map((b) => b.id);
-          try {
-            store?.setItem(STORE_KEY, JSON.stringify({ server: base, room: code, hostToken }));
-          } catch {}
-          conn.up();
-          for (const s of state) neutral(s);
-          for (const s of m.slots) if (s.connected) join(s.slot, s.name, true);
-          // The server forgets pad state if it restarted; send ours again.
-          for (const [n, patch] of Object.entries(padState)) conn.send({ t: 'pad', slot: Number(n), patch });
-          setStatus('connected');
-          if (!ready) resolve(room);
-          ready = true;
-        } else if (m.t === 'join') {
-          join(m.slot, m.name, m.rejoin);
-        } else if (m.t === 'leave') {
-          leave(m.slot, m.reason);
-        } else if (m.t === 'input') {
-          const s = state[m.slot - 1];
-          if (!s) return;
-          const buttons = {};
-          for (const id of buttonIds) buttons[id] = !!m.b[id];
-          for (const id in buttons) if (buttons[id] && !s.buttons[id]) s.pressed[id] = true;
-          s.x = m.x;
-          s.y = m.y;
-          s.buttons = buttons;
-        } else if (m.t === 'message') {
-          emit('message', { slot: m.slot, data: m.data });
-        } else if (m.t === 'error') {
-          if (!ready) return fail(Object.assign(new Error(`Joinstick: ${m.code}${m.message ? ` (${m.message})` : ''}`), { code: m.code }));
-          if (m.code === 'replaced') return close();
-          console.warn('joinstick:', m.code, m.message ?? '');
+        try {
+          handle(m);
+        } catch (err) {
+          if (!ready) return fail(err);
+          console.error(err);
         }
       },
     });
+
+    function handle(m) {
+      if (m.t === 'created') {
+        resumedOnce = true;
+        code = m.room;
+        hostToken = m.hostToken;
+        joinBase = m.joinBase;
+        buttonIds = m.layout.buttons.map((b) => b.id);
+        try {
+          store?.setItem(STORE_KEY, JSON.stringify({ server: base, slots, room: code, hostToken }));
+        } catch {}
+        conn.up();
+        for (const s of state) neutral(s);
+        for (const s of m.slots) if (s.connected) join(s.slot, s.name, true);
+        // The server forgets pad state if it restarted; send ours again.
+        for (const [n, patch] of Object.entries(padState)) conn.send({ t: 'pad', slot: Number(n), patch });
+        setStatus('connected');
+        if (!ready) resolve(room);
+        ready = true;
+      } else if (m.t === 'join') {
+        join(m.slot, m.name, m.rejoin);
+      } else if (m.t === 'leave') {
+        leave(m.slot, m.reason);
+      } else if (m.t === 'input') {
+        const s = state[m.slot - 1];
+        if (!s) return;
+        const buttons = {};
+        for (const id of buttonIds) buttons[id] = Object.hasOwn(m.b, id) && m.b[id] === true;
+        if (!s.baseline) for (const id of buttonIds) if (buttons[id] && !s.buttons[id]) s.pressed[id] = true;
+        s.baseline = false;
+        s.x = m.x;
+        s.y = m.y;
+        s.buttons = buttons;
+      } else if (m.t === 'message') {
+        emit('message', { slot: m.slot, data: m.data });
+      } else if (m.t === 'error') {
+        if (!ready) return fail(Object.assign(new Error(`Joinstick: ${m.code}${m.message ? ` (${m.message})` : ''}`), { code: m.code }));
+        emit('error', { code: m.code, message: m.message });
+        if (m.code === 'replaced') return close(); // another tab took this room
+        if (!listeners.error?.size) console.warn('joinstick:', m.code, m.message ?? '');
+      }
+    }
 
     function fail(err) {
       close();

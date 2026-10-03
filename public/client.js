@@ -92,8 +92,9 @@ export function join({ room: roomCode, slot, name, server } = {}) {
         setItem(`joinstick:${room}:${slot}`, token);
         conn.up();
         lostAt = 0;
-        lastSent = '';
-        if (input !== NEUTRAL) sendInput(true);
+        // Always send the current state first: the host treats it as the
+        // baseline, so a button held through a rejoin is not a new press.
+        sendInput(true);
         if (!ready) resolveJoin(pad);
         ready = true;
         emit('pad', padState, {});

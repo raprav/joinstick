@@ -20,6 +20,7 @@ const HOST_TOKEN = /^[0-9a-f]{32}$/;
 const MAX_SLOTS = 8;
 const MAX_BUTTONS = 8;
 const MAX_ROOMS = 1000;
+const MAX_ROOMS_PER_IP = 20;
 const MAX_FAILED_JOINS = 5;
 const PING_EVERY = 2000;
 const SILENCE = 5000;
@@ -192,27 +193,36 @@ export function attach(server, opts = {}) {
     const wanted = typeof m.room === 'string' ? m.room.toUpperCase() : '';
     let room = rooms.get(wanted);
 
-    if (room && room.hostToken === m.hostToken) {
-      // Resume: same room, same pads. A changed layout is pushed to joined pads.
+    const ip = req.socket.remoteAddress;
+    let resumed = false;
+    if (room && room.hostToken === m.hostToken && room.slots.length === n) {
+      // Resume: same room, same pads. Pads get a fresh 'joined' when the
+      // layout changed or the host asks to reset pad state (game reloaded).
+      resumed = true;
       clearTimeout(room.timer);
       const old = room.host;
       room.host = ws;
       if (old) fatal(old, 'replaced');
-      if (JSON.stringify(layout) !== JSON.stringify(room.layout)) {
-        room.layout = layout;
+      const relayout = JSON.stringify(layout) !== JSON.stringify(room.layout);
+      room.layout = layout;
+      if (m.resetPads === true) for (const s of room.slots) s.pad = {};
+      if (relayout || m.resetPads === true) {
         room.slots.forEach((s, i) => send(s.ws, { t: 'joined', room: room.code, slot: i + 1, layout, pad: s.pad }));
       }
     } else {
       if (rooms.size >= MAX_ROOMS) return fatal(ws, 'server-full');
+      // ponytail: per-IP cap only; behind a tunnel every host shares one IP.
+      if ([...rooms.values()].filter((r) => r.ip === ip).length >= MAX_ROOMS_PER_IP) return fatal(ws, 'server-full');
       // Recreate (e.g. after a server restart) keeps the code so pads can rejoin.
       const recreate = !room && CODE.test(wanted) && HOST_TOKEN.test(m.hostToken ?? '');
       room = {
         code: recreate ? wanted : newCode(),
         hostToken: recreate ? m.hostToken : crypto.randomBytes(16).toString('hex'),
         layout,
-        slots: Array.from({ length: n }, () => ({ ws: null, token: null, name: '', pad: {} })),
+        slots: Array.from({ length: n }, () => ({ ws: null, token: null, name: '', pad: {}, input: null })),
         host: ws,
         timer: null,
+        ip,
       };
       rooms.set(room.code, room);
     }
@@ -220,6 +230,8 @@ export function attach(server, opts = {}) {
     ws.room = room;
     room.joinBase = joinBase(req);
     send(ws, { t: 'created', room: room.code, hostToken: room.hostToken, joinBase: room.joinBase, layout: room.layout, slots: slotList(room) });
+    // A refreshed game must still see a direction or button held through the refresh.
+    if (resumed) room.slots.forEach((s, i) => s.ws && s.input && send(ws, { t: 'input', slot: i + 1, ...s.input }));
   }
 
   function onJoin(ws, m) {
@@ -246,7 +258,7 @@ export function attach(server, opts = {}) {
 
     const old = s.ws;
     const rejoin = s.token === m.token;
-    Object.assign(s, { ws, token: m.token, name: cleanText(m.name, 20) });
+    Object.assign(s, { ws, token: m.token, name: cleanText(m.name, 20), input: null });
     Object.assign(ws, { role: 'pad', room, slot: i + 1 });
     if (old) fatal(old, 'replaced');
     send(ws, { t: 'joined', room: room.code, slot: i + 1, layout: room.layout, pad: s.pad });
@@ -278,11 +290,11 @@ export function attach(server, opts = {}) {
   }
 
   function onPad(ws, m) {
-    if (!ws.room.host) return;
     if (m.t === 'input') {
-      const x = axis(m.x);
-      const y = axis(m.y);
-      send(ws.room.host, { t: 'input', slot: ws.slot, x, y, b: parseButtons(m.b ?? {}) });
+      // Kept while the host is away so a resumed host gets it right away.
+      const input = { x: axis(m.x), y: axis(m.y), b: parseButtons(m.b ?? {}) };
+      ws.room.slots[ws.slot - 1].input = input;
+      send(ws.room.host, { t: 'input', slot: ws.slot, ...input });
     } else if (m.t === 'msg') {
       send(ws.room.host, { t: 'message', slot: ws.slot, data: m.data });
     } else {
