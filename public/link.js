@@ -26,14 +26,15 @@ export function link(url, { open, message, down }) {
       if (m.t === 'ping') send({ t: 'pong' });
       else message(m);
     };
-    ws.onclose = () => drop();
+    // Some runtimes (Node 22) fire 'error' without 'close' on a refused connection.
+    ws.onclose = ws.onerror = () => drop();
   }
 
   // Close the socket right away (a dead connection can take long to report
   // 'close') and tell the owner it is down.
   function drop(code) {
     if (!ws) return;
-    ws.onopen = ws.onmessage = ws.onclose = null;
+    ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null;
     try {
       ws.close(code);
     } catch {}

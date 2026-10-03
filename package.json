@@ -47,7 +47,7 @@
   },
   "scripts": {
     "start": "node src/cli.js",
-    "test": "node --test test/"
+    "test": "node --test"
   },
   "dependencies": {
     "uqr": "^0.1.3",
