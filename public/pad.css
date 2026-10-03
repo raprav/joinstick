@@ -151,6 +151,7 @@ body { position: fixed; inset: 0; }
 }
 
 .btn {
+  position: relative;
   display: grid;
   place-items: center;
   width: var(--btn);
@@ -168,9 +169,30 @@ body { position: fixed; inset: 0; }
 .btn.large { width: calc(var(--btn) * 1.2); height: calc(var(--btn) * 1.2); }
 .btn.down { transform: scale(0.92); filter: brightness(1.25); box-shadow: inset 0 3px 0 #0004, 0 2px 6px #0006; }
 .btn.off { opacity: 0.25; filter: grayscale(1); }
-.btn.glow { animation: glow 0.8s ease-in-out infinite alternate; }
-@keyframes glow {
-  to { box-shadow: inset 0 -6px 0 #0004, 0 0 0 4px #fffa, 0 0 28px 6px var(--c); }
+/* Highlight must be obvious mid-fight: bright solid fill, a white ring that
+   pulses outwards and a gentle bump (the 'scale' property, so pressing still
+   works through 'transform'). */
+.btn.glow {
+  background: color-mix(in srgb, var(--c) 45%, #fff);
+  color: #10121a;
+  text-shadow: none;
+  box-shadow: 0 0 0 4px #fff, 0 0 32px 8px var(--c);
+  animation: bump 0.7s ease-in-out infinite alternate;
+}
+.btn.glow::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 4px solid #fff;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: ring 1s ease-out infinite;
+}
+@keyframes bump { to { scale: 1.08; } }
+@keyframes ring { from { scale: 1; opacity: 0.9; } to { scale: 1.45; opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .btn.glow { animation: none; }
+  .btn.glow::after { animation: none; inset: -10px; opacity: 1; }
 }
 
 .screen {
