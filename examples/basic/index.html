@@ -63,11 +63,14 @@ function refresh() {
     p.label.textContent = on ? `Player ${p.n} connected` : `Player ${p.n}: scan to join`;
   }
 }
-room.on('join', ({ slot }) => {
+function greet(slot) {
   room.pad(slot, { title: `Player ${slot}`, color: COLORS[slot - 1] });
   refresh();
-});
+}
+room.on('join', ({ slot }) => greet(slot));
 room.on('leave', refresh);
+// After a page reload, phones that stayed connected get no 'join' event.
+for (const p of players) if (room.connected(p.n)) greet(p.n);
 refresh();
 
 const canvas = document.getElementById('game');
