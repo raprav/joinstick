@@ -8,7 +8,7 @@ import { isLoopback, lanAddresses } from './lan.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
-const SDK_FILES = new Set(['host.js', 'host.d.ts', 'client.js', 'client.d.ts', 'pad.js', 'pad.css']);
+const SDK_FILES = new Set(['host.js', 'host.d.ts', 'client.js', 'client.d.ts', 'link.js', 'pad.js', 'pad.css']);
 
 const LETTERS = 'BCDFGHJKLMNPQRSTVWXZ';
 const CODE = /^[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
@@ -144,6 +144,7 @@ export function attach(server, opts = {}) {
   const staticDir = opts.static && path.resolve(opts.static);
   const hostGrace = opts.hostGraceMs ?? 60_000;
   const rooms = new Map();
+  let closed = false;
   const wss = new WebSocketServer({ noServer: true, maxPayload: 8 * 1024 });
 
   function joinBase(req) {
@@ -290,7 +291,7 @@ export function attach(server, opts = {}) {
 
   function onClose(ws, code) {
     const room = ws.room;
-    if (!room) return;
+    if (!room || closed) return;
     if (ws.role === 'host') {
       if (room.host !== ws) return;
       room.host = null;
@@ -414,6 +415,7 @@ export function attach(server, opts = {}) {
 
   return {
     close() {
+      closed = true;
       clearInterval(pinger);
       for (const room of rooms.values()) clearTimeout(room.timer);
       rooms.clear();
