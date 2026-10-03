@@ -40,26 +40,30 @@ message from the server.
 ### `create`
 
 ```json
-{"t":"create","v":1,"slots":2,"layout":{"stick":"dpad","buttons":[{"id":"a","label":"A"}]},"room":"KQZX","hostToken":"…"}
+{"t":"create","v":1,"slots":2,"layout":{"stick":"dpad","buttons":[{"id":"a","label":"A"}]},"room":"KQZX","hostToken":"…","resetPads":true}
 ```
 
 | Field | |
 |---|---|
 | `v` | Must be `1`, else fatal `version`. |
 | `slots` | 1-8, default 2. |
-| `layout` | Optional. `stick`: `'dpad'` (default) or `'none'`. `buttons`: ≤ 8 of `{id, label?, color?, size?}`; `id` `/^[A-Za-z0-9_-]{1,16}$/` unique, `label` ≤ 8 chars (default id), `color` `/^#[0-9a-f]{3,8}$/i`, `size` `'large'`. Default: d-pad + buttons `a`, `b`. |
+| `layout` | Optional. `stick`: `'dpad'` (default) or `'none'`. `buttons`: ≤ 8 of `{id, label?, color?, size?}`; `id` `/^[A-Za-z0-9_-]{1,16}$/`, unique, not an `Object.prototype` name; `label` ≤ 8 chars (default id), `color` `/^#[0-9a-f]{3,8}$/i`, `size` `'large'`. Default: d-pad + buttons `a`, `b`. |
 | `room`, `hostToken` | Optional, to resume. |
+| `resetPads` | Optional. `true` on resume clears every slot's pad state (the game was reloaded). The host SDK sends it on the first `create` of each `host()` call. |
 
 Resume-or-recreate:
 
-- `room` exists and `hostToken` matches → **resume** the same room and pads.
-  A previous host connection gets fatal `replaced`. If the layout changed,
-  connected pads receive a fresh `joined` with it. `slots` is ignored.
+- `room` exists, `hostToken` matches and `slots` is the same → **resume** the
+  same room and pads. A previous host connection gets fatal `replaced`. If the
+  layout changed or `resetPads` is true, connected pads receive a fresh
+  `joined`. Right after `created`, the server sends the last `input` of every
+  connected pad, so held state survives the reload.
 - `room` does not exist, `room` is a valid code and `hostToken` is 32 hex
   chars → **recreate** the room with that code and token (server restart case).
 - Otherwise → a new room with a new code and token.
 
-More than 1000 rooms → fatal `server-full`.
+More than 1000 rooms, or 20 rooms created from the same client address →
+fatal `server-full`.
 
 ### `pad`
 
@@ -123,7 +127,10 @@ close, including a locked phone), `timeout` (no pong for 5 s), `kicked`.
 {"t":"input","slot":1,"x":-1,"y":0,"b":{"a":true,"b":false}}
 ```
 
-Full state, forwarded as sent by the pad (x, y clamped to [-1, 1]).
+Full state, forwarded as sent by the pad (x, y clamped to [-1, 1]). The first
+`input` after a `join` (or after `created` on resume) is the slot's baseline:
+buttons already down in it are held, not new presses. The client SDK always
+sends one right after `joined`.
 
 ### `message`
 
@@ -163,8 +170,10 @@ After 5 failed joins on one socket the server closes it.
 ```
 
 Full state on every change. `x`, `y` are finite numbers (clamped to [-1, 1];
-`y` = -1 is up). `b` maps ≤ 16 button ids to booleans. Dropped while the host
-is away.
+`y` = -1 is up). `b` maps ≤ 16 button ids to booleans (`Object.prototype`
+names are refused). While the host is away it is not forwarded, but the
+server keeps the latest one per slot for the host's resume. Send your current
+state right after every `joined`.
 
 ### `msg`
 
@@ -182,8 +191,8 @@ Delivered to the host as `message` with the pad's slot.
 {"t":"joined","room":"KQZX","slot":1,"layout":{…},"pad":{"title":"Ryu","color":"#e5484d"}}
 ```
 
-`pad` is the slot's current pad state. Sent again (same shape) if the host
-resumes with a different layout.
+`pad` is the slot's current pad state. Sent again (same shape) when the host
+resumes with a different layout or with `resetPads`.
 
 ### `pad`
 
@@ -209,7 +218,7 @@ resumes with a different layout.
 | `kicked` | yes | Host kicked this pad. |
 | `room-closed` | yes | Host gone for 60 s; room deleted. |
 | `version` | yes | `v` is not 1. |
-| `server-full` | yes | Room limit (1000) reached. |
+| `server-full` | yes | Room limit reached (1000 total, 20 per client address). |
 
 "Fatal" means the server closes the socket right after the error. Failed
 joins (the non-fatal join errors) count toward the 5-failure limit.

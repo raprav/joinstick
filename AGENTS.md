@@ -8,8 +8,12 @@ contract. Wire format: [PROTOCOL.md](PROTOCOL.md). Types:
 
 ## 1. Run the server
 
+Joinstick is **not on npm yet**. Run it from a checkout (Node 22+):
+
 ```sh
-npx joinstick --static ./my-game        # serves the game AND Joinstick on :3000
+git clone https://github.com/raprav/joinstick && (cd joinstick && npm install)
+node joinstick/src/cli.js --static ./my-game   # serves the game AND Joinstick on :3000
+# or add it to your project: npm i <git url or path to the checkout>, then npx joinstick --static ./my-game
 ```
 
 Open `http://localhost:3000/` on the computer. Phones must be on the same
@@ -38,17 +42,35 @@ Slots are **1-based** everywhere. `room.input(0)` throws `RangeError`.
 
 ## 3. Pause when a player is missing
 
+The simplest correct recipe is to check every frame:
+
+```js
+const everyone = () => [1, 2].every((n) => room.connected(n));
+// in your frame loop:
+const paused = !everyone();
+```
+
+With events, also check once at start, because pads that were already
+connected when `host()` resolved do not get a `join` event (see below):
+
 ```js
 room.on('leave', ({ slot, reason }) => pause(`Waiting for player ${slot}`));
-room.on('join', ({ slot, name, rejoin }) => { if ([1, 2].every((n) => room.connected(n))) resume(); });
-// or simply, every frame: const paused = ![1, 2].every((n) => room.connected(n));
+room.on('join', () => { if (everyone()) resume(); });
+if (!everyone()) pause('Waiting for players');
 ```
 
 `leave` fires immediately when a phone is locked, backgrounded, loses Wi-Fi,
 holds "Leave", or is kicked. The same phone rejoins the same slot by itself
-when it comes back; a new person can also scan that slot's QR. If the host
-page itself loses the server, every slot gets `leave` (reason
-`'disconnected'`) and then `join` with `rejoin: true` once it is back.
+when it comes back; a new person can also scan that slot's QR.
+
+Exact ordering in each reconnect case:
+
+| Case | What the game sees |
+|---|---|
+| Game page reloaded (same tab) | `host()` resumes the room. Pads already connected show as `connected(n) === true` **when `host()` resolves**; no `join` event for them. Pads that arrive later get `join`. Held input is restored. |
+| Host loses the server briefly (Wi-Fi blip) | `leave` (reason `'disconnected'`) for every connected slot, then `join` with `rejoin: true` for each once back. |
+| Server restarted | `leave` (`'disconnected'`) for every slot; the host recreates the same code; each phone rejoins with a `join` whose `rejoin` is **false** (the server forgot the tokens). |
+| Phone locked / Wi-Fi lost, then back | `leave` (`'disconnected'`), later `join` with `rejoin: true`. |
 
 ## 4. Input contract
 
@@ -66,12 +88,17 @@ page itself loses the server, every slot gets `leave` (reason
   or miss fast taps.
 - Use `buttons` for things that last while held (block, run, charge).
 - Neutral (`x = y = 0`, all buttons false, `pressed` empty) when the slot is
-  empty, right after `leave`, and right after `join`.
+  empty and right after `leave`. After a `join` or a game reload, a direction
+  or button the player is already holding shows in `x`/`y`/`buttons` but never
+  in `pressed`.
 - Read `input(n)` exactly once per frame per slot; a second read in the same
   frame has an empty `pressed`.
 - The d-pad is 8-way. Up and the up-diagonals need the thumb clearly above
   horizontal (30° or more), so a resting thumb does not jump by accident.
 - There is no input event; polling is the only way to read input.
+- **Keep calling `input(n)` every frame while paused** and ignore the result.
+  Otherwise presses made during the pause are still latched and fire the
+  moment you resume.
 
 ## 5. Layout
 
@@ -89,7 +116,8 @@ makes `host()` reject with `code: 'bad-message'` and a message saying why.
 }
 ```
 
-- `id`: `/^[A-Za-z0-9_-]{1,16}$/`, unique. It is the key in `buttons`/`pressed`.
+- `id`: `/^[A-Za-z0-9_-]{1,16}$/`, unique, and not an `Object.prototype`
+  name (`constructor`, `toString`, `__proto__`...). It is the key in `buttons`/`pressed`.
 - `label`: ≤ 8 chars (defaults to the id). `color`: `/^#[0-9a-f]{3,8}$/i`.
 - `size`: `'large'` or omitted.
 - Works in portrait and landscape (the pad page adapts; iOS cannot lock orientation).
@@ -98,14 +126,26 @@ makes `host()` reject with `code: 'bad-message'` and a message saying why.
 
 ```js
 room.pad(1, { title: 'Ryu', color: '#e5484d' });  // header text (≤ 20 chars) and accent color
-room.pad(1, { highlight: ['a'] });                 // glow "press A to start" (+ short vibration)
+room.pad(1, { highlight: ['a'] });                 // glow and make the phone vibrate briefly (Android only)
 room.pad(1, { disabled: ['super'] });              // greyed out, cannot be pressed
 room.pad(1, { vibrate: 200 });                     // one-shot, ms (0-2000), Android only
 room.pad(1, { highlight: [], disabled: [] });      // clear
 ```
 
 Patches merge; the server remembers the last state per slot and re-sends it
-when a phone (re)joins.
+when a phone (re)joins. A button that is both highlighted and disabled is
+shown disabled, without glow (disabled wins).
+
+A **game page reload** (any new `host()` call that resumes the room) resets
+every pad to the default state, because the game starts from scratch. In-session
+reconnects (Wi-Fi blips, server restarts) keep the pad state. Pads still
+connected after a reload get no `join` event, so set their state at start too:
+
+```js
+const greet = (slot) => room.pad(slot, { title: `Player ${slot}` });
+room.on('join', ({ slot }) => greet(slot));
+for (let n = 1; n <= room.slots; n++) if (room.connected(n)) greet(n);
+```
 
 ## 7. Full host API
 
@@ -127,15 +167,23 @@ room.close()              // leave and forget the room (refresh keeps it otherwi
 
 Events: `join {slot, name, rejoin}`, `leave {slot, reason}` where reason is
 `'left' | 'disconnected' | 'timeout' | 'kicked'`, `message {slot, data}`,
-`status` (string).
+`status` (string), `error {code, message}` (server errors after `host()`
+resolved).
 
 `host()` rejects with an `Error` whose `code` is `'bad-message'` (invalid
 options), `'server-full'` or `'version'`, or with "Cannot reach the Joinstick
-server" when nothing answers.
+server" when nothing answers. It never hangs on an error.
 
 A page refresh or a server restart is transparent: the room code and hostToken
 are kept in `sessionStorage`, the host reconnects with backoff and recreates
-the same code, and phones rejoin. QR codes stay valid.
+the same code, and phones rejoin. QR codes stay valid. A stored room is only
+resumed with the same server URL and the same `slots`; otherwise `host()`
+creates a new room.
+
+**Duplicated tabs:** Chrome's "Duplicate tab" copies `sessionStorage`, so the
+new tab resumes the same room and the original tab gets an `error` event with
+`code: 'replaced'`, then `status: 'closed'` (it stops reconnecting). Show a
+"this game is open in another tab" message on that event.
 
 ## 8. CLI and embedding
 
@@ -147,12 +195,16 @@ joinstick [--port 3000] [--static ./dir] [--public-url URL]
 |---|---|---|
 | `--port` | `PORT` | Port (default 3000). |
 | `--static <dir>` | | Serve your game from the same server (recommended). |
-| `--public-url <url>` | `PUBLIC_URL` | Base URL phones should open (tunnels, Docker, reverse proxies). |
+| `--public-url <url>` | `PUBLIC_URL` | Base URL phones should open (tunnels, Docker, reverse proxies). Must be an origin like `https://abc.example.com`, without a path: Joinstick's routes live at the root. |
 
 The join URL base is chosen as: `--public-url`, else the `Host` header the
 game used if it is not loopback, else the detected LAN IPv4 (192.168.x
 preferred; Docker/VPN/virtual interfaces skipped). All candidates are printed
 at startup.
+
+`--static` refuses dotfiles (`.env`, `.git/...`) and reads each file whole,
+without HTTP Range support: fine for game assets, but Safari needs Range
+requests to play `<video>`/`<audio>`, so serve media elsewhere if you need it.
 
 Embed in an existing Node server instead of using the CLI:
 
@@ -164,6 +216,10 @@ attach(server, { static: './dist', publicUrl: process.env.PUBLIC_URL });
 server.listen(3000);
 ```
 
+Call `attach()` after every other `'request'` listener is registered: it wraps
+the listeners that exist at that moment, and later ones would also answer
+Joinstick's routes.
+
 Append `?name=Ana` to a join URL to give the player a name (shown to the host
 in the `join` event).
 
@@ -174,7 +230,7 @@ Routes: WebSocket `/joinstick/ws`; SDKs `/joinstick/host.js`,
 ### Game served elsewhere (Vite, another port)
 
 ```js
-import { host } from 'joinstick/host'; // npm i joinstick (types included)
+import { host } from 'joinstick/host'; // npm i <git url or checkout path> (types included)
 const room = await host({ slots: 2, server: `http://${location.hostname}:3000` });
 ```
 
@@ -208,10 +264,16 @@ Remote players over the internet:
 
 ```sh
 cloudflared tunnel --url http://localhost:3000     # prints https://xyz.trycloudflare.com
-npx joinstick --static ./my-game --public-url https://xyz.trycloudflare.com
+node joinstick/src/cli.js --static ./my-game --public-url https://xyz.trycloudflare.com
 ```
 
 QR codes and `joinUrl()` then point at the tunnel; phones use `wss://` automatically.
+
+Room codes are 4 letters (160,000 combinations), so on a public URL anyone
+patient can guess one and take a free slot. That is fine for playing with
+friends; there is no authentication beyond the code. The server caps rooms at
+1000 in total and 20 per client address (behind a tunnel all hosts share one
+address).
 
 ## 10. Error codes
 
@@ -225,7 +287,7 @@ QR codes and `joinUrl()` then point at the tunnel; phones use `wss://` automatic
 | `kicked` | The host called `room.kick(n)`. |
 | `room-closed` | The host was gone for 60 s; the room was deleted. |
 | `version` | Protocol version mismatch. |
-| `server-full` | 1000 rooms already exist. |
+| `server-full` | 1000 rooms already exist, or this address already created 20. |
 | `unreachable` | Client SDK only: the server could not be reached. |
 
 ## 11. Pitfalls
@@ -243,8 +305,35 @@ QR codes and `joinUrl()` then point at the tunnel; phones use `wss://` automatic
   `--public-url http://<host-lan-ip>:3000`.
 - Check the printed "Phones join at" URL: if it is not reachable from a phone,
   nothing else will be.
+- A pad in a **background tab** leaves its slot (that is the lock-screen
+  behavior). When testing with pads in the browser, keep them in the visible
+  game tab or a separate window, or use a Node script (next section).
 
-## 12. Don't
+## 12. Testing without phones
+
+Drive pads from code with the client SDK; it is how you verify an
+integration end to end. In the game tab's DevTools console (the room code is
+`room.code`; use the full `http://localhost:3000/joinstick/client.js` URL if
+the game is served from another origin):
+
+```js
+const { join } = await import('/joinstick/client.js');
+const pad = await join({ room: 'KQZX', slot: 1 });
+pad.setInput({ x: 1 });                                  // hold right
+pad.setInput({ x: 1, buttons: { a: true } });            // press A...
+pad.setInput({ x: 1, buttons: { a: false } });           // ...and release: pressed.a once
+pad.leave();                                             // the game should pause
+```
+
+Or from a Node 22+ script next to the checkout (`node pads.mjs KQZX`):
+
+```js
+import { join } from './joinstick/public/client.js';
+const pad = await join({ server: 'http://localhost:3000', room: process.argv[2], slot: 2 });
+setInterval(() => pad.setInput({ x: Math.sign(Math.random() - 0.5) }), 500);
+```
+
+## 13. Don't
 
 - Don't use `innerHTML` with player names, messages or anything from the
   network. Use `textContent`.
