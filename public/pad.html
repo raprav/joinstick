@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#101218">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Joinstick</title>
+<link rel="stylesheet" href="/joinstick/pad.css">
+<script type="module" src="/joinstick/pad.js"></script>
+</head>
+<body>
+<main id="pad" hidden>
+  <header class="bar">
+    <span id="slot" class="slot"></span>
+    <span id="title" class="title"></span>
+    <span id="code" class="code"></span>
+    <button id="leave" class="leave" type="button">Hold to leave</button>
+  </header>
+  <div id="controls" class="controls">
+    <div id="stick" class="dpad" aria-hidden="true">
+      <i class="arm up"></i><i class="arm right"></i><i class="arm down"></i><i class="arm left"></i><i class="hub"></i>
+    </div>
+    <div id="buttons" class="buttons"></div>
+  </div>
+</main>
+
+<section id="screen" class="screen">
+  <h1 id="screen-title">Connecting…</h1>
+  <p id="screen-text"></p>
+  <div id="screen-actions" class="actions"></div>
+</section>
+
+<form id="form" class="screen" hidden>
+  <h1>Join a game</h1>
+  <p>Type the code shown on the game screen.</p>
+  <label>Room code
+    <input name="room" maxlength="4" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" required pattern="[A-Za-z]{4}" placeholder="KQZX">
+  </label>
+  <label>Player number
+    <input name="slot" type="number" inputmode="numeric" min="1" max="8" value="1" required>
+  </label>
+  <button class="primary">Join</button>
+</form>
+</body>
+</html>
