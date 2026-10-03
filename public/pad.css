@@ -127,12 +127,13 @@ body { position: fixed; inset: 0; }
   position: absolute;
   background: #2f3445;
 }
-.arm { border-radius: 10px; transition: background 60ms; }
+.arm { transition: background 60ms; }
+/* Arms meet the hub without overlapping, so a lit arm is one clean shape. */
 .hub { left: 34%; top: 34%; width: 32%; height: 32%; }
-.arm.up    { left: 34%; top: 8%;    width: 32%; height: 34%; }
-.arm.down  { left: 34%; bottom: 8%; width: 32%; height: 34%; }
-.arm.left  { top: 34%; left: 8%;    width: 34%; height: 32%; }
-.arm.right { top: 34%; right: 8%;   width: 34%; height: 32%; }
+.arm.up    { left: 34%; top: 8%;    width: 32%; height: 26%; border-radius: 10px 10px 0 0; }
+.arm.down  { left: 34%; bottom: 8%; width: 32%; height: 26%; border-radius: 0 0 10px 10px; }
+.arm.left  { top: 34%; left: 8%;    width: 26%; height: 32%; border-radius: 10px 0 0 10px; }
+.arm.right { top: 34%; right: 8%;   width: 26%; height: 32%; border-radius: 0 10px 10px 0; }
 .arm.on { background: var(--accent); box-shadow: 0 0 18px var(--accent); }
 
 .buttons {
