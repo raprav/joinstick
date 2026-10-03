@@ -70,6 +70,7 @@ function parseLayout(l) {
   const seen = new Set();
   const buttons = list.map((b) => {
     check(isObj(b) && typeof b.id === 'string' && ID.test(b.id), 'button id must match [A-Za-z0-9_-]{1,16}');
+    check(!(b.id in Object.prototype), `button id '${b.id}' is reserved`);
     check(!seen.has(b.id), `duplicate button id '${b.id}'`);
     seen.add(b.id);
     const label = b.label ?? b.id;
@@ -112,7 +113,7 @@ function parsePatch(p) {
 function parseButtons(b) {
   check(isObj(b), 'b must be an object');
   const keys = Object.keys(b);
-  check(keys.length <= 16 && keys.every((k) => ID.test(k) && typeof b[k] === 'boolean'), 'b must map button ids to booleans');
+  check(keys.length <= 16 && keys.every((k) => ID.test(k) && !(k in Object.prototype) && typeof b[k] === 'boolean'), 'b must map button ids to booleans');
   return b;
 }
 
@@ -344,7 +345,8 @@ export function attach(server, opts = {}) {
   pinger.unref();
 
   server.on('upgrade', (req, socket, head) => {
-    if (new URL(req.url, 'http://x').pathname === '/joinstick/ws') {
+    // Compare the raw path: a malformed URL must not be able to throw here.
+    if ((req.url ?? '').split('?')[0] === '/joinstick/ws') {
       wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
     } else if (server.listenerCount('upgrade') === 1) {
       socket.destroy();
@@ -372,6 +374,7 @@ export function attach(server, opts = {}) {
     } catch {
       return false;
     }
+    if (rel.split('/').some((part) => part.startsWith('.'))) return false; // .env, .git, ..
     let file = path.resolve(staticDir, '.' + rel);
     if (file !== staticDir && !file.startsWith(staticDir + path.sep)) return false;
     if (rel.endsWith('/')) file = path.join(file, 'index.html');
@@ -380,7 +383,13 @@ export function attach(server, opts = {}) {
 
   async function handle(req, res) {
     if (req.method !== 'GET' && req.method !== 'HEAD') return false;
-    const url = new URL(req.url, 'http://x');
+    let url;
+    try {
+      url = new URL(req.url, 'http://x');
+    } catch {
+      res.writeHead(400).end();
+      return true;
+    }
     const p = url.pathname;
     const cors = { 'access-control-allow-origin': '*' };
 
