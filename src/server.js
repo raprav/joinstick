@@ -21,7 +21,9 @@ const MAX_SLOTS = 8;
 const MAX_BUTTONS = 8;
 const MAX_ROOMS = 1000;
 const MAX_ROOMS_PER_IP = 20;
-const MAX_FAILED_JOINS = 5;
+const MAX_FAILED_JOINS = 5; // per socket
+const MAX_FAILED_JOINS_PER_IP = 20; // per minute, across sockets: slows down code guessing
+const FAILED_WINDOW = 60_000;
 const PING_EVERY = 2000;
 const SILENCE = 5000;
 const DEFAULT_LAYOUT = { stick: 'dpad', buttons: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }] };
@@ -163,6 +165,10 @@ export function attach(server, opts = {}) {
   const staticDir = opts.static && path.resolve(opts.static);
   const hostGrace = opts.hostGraceMs ?? 60_000;
   const rooms = new Map();
+  const failedJoins = new Map(); // ip -> { count, since }
+  // Right after a (re)start, phones of recreated rooms retry their joins
+  // until the game page is back; those misses are not guessing.
+  const countFailuresFrom = Date.now() + hostGrace;
   let closed = false;
   const wss = new WebSocketServer({ noServer: true, maxPayload: 8 * 1024 });
 
@@ -253,8 +259,15 @@ export function attach(server, opts = {}) {
 
   function onJoin(ws, m) {
     if (m.v !== 1) return fatal(ws, 'version');
+    const now = Date.now();
+    let recent = failedJoins.get(ws.ip);
+    if (!recent || now - recent.since >= FAILED_WINDOW) recent = { count: 0, since: now };
+    // ponytail: keyed by socket address, so behind a proxy or tunnel one guesser
+    // locks every remote phone out for a minute; key on a trusted header if that matters.
+    if (recent.count >= MAX_FAILED_JOINS_PER_IP) return fatal(ws, 'rate-limited');
     const fail = (code, extra) => {
       send(ws, { t: 'error', code, ...extra });
+      if (now >= countFailuresFrom) failedJoins.set(ws.ip, { ...recent, count: recent.count + 1 });
       if (++ws.failedJoins >= MAX_FAILED_JOINS) ws.close(4000, 'too many failed joins');
     };
     if (typeof m.token !== 'string' || !TOKEN.test(m.token)) return fail('bad-message', { message: 'token must match [A-Za-z0-9_-]{16,64}' });
@@ -337,6 +350,7 @@ export function attach(server, opts = {}) {
   wss.on('connection', (ws, req) => {
     ws.seen = Date.now();
     ws.failedJoins = 0;
+    ws.ip = req.socket.remoteAddress;
     ws.on('message', (raw, isBinary) => {
       ws.seen = Date.now();
       let m;
@@ -362,6 +376,7 @@ export function attach(server, opts = {}) {
 
   const pinger = setInterval(() => {
     const now = Date.now();
+    for (const [ip, recent] of failedJoins) if (now - recent.since >= FAILED_WINDOW) failedJoins.delete(ip);
     for (const ws of wss.clients) {
       if (now - ws.seen > SILENCE) {
         ws.leaveReason ??= 'timeout';

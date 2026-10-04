@@ -22,6 +22,7 @@ export type ErrorCode =
   | 'kicked'
   | 'room-closed'
   | 'version'
+  | 'rate-limited'
   | 'unreachable';
 
 export interface JoinError {

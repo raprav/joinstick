@@ -3,7 +3,7 @@
 import { link } from './link.js';
 
 const REJOIN_WINDOW = 60_000;
-const FATAL = new Set(['room-not-found', 'slot-taken', 'bad-slot', 'replaced', 'kicked', 'room-closed', 'version']);
+const FATAL = new Set(['room-not-found', 'slot-taken', 'bad-slot', 'replaced', 'kicked', 'room-closed', 'version', 'rate-limited']);
 const memory = new Map();
 
 function storage() {

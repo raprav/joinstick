@@ -571,3 +571,34 @@ test('layout options: orientation, arrangement, haptics, sizes and system button
   }
   await srv.stop();
 });
+
+async function failJoins(url, n) {
+  for (let done = 0; done < n; ) {
+    const p = sock(url); // each socket closes after 5 failures
+    for (let i = 0; i < 5 && done < n; i++, done++) {
+      p.send({ t: 'join', v: 1, room: 'ZZZZ', token: T1 });
+      assert.equal((await p.next()).code, 'room-not-found');
+    }
+    await p.close();
+  }
+}
+
+test('failed joins are limited per address, across sockets', async () => {
+  // Right after a start, misses are pads waiting for their recreated room: not counted.
+  const fresh = await start();
+  await failJoins(fresh.url, 25);
+  const ok = await createRoom(fresh.url);
+  assert.equal((await joinPad(fresh.url, ok.created.room, 1, T1)).joined.t, 'joined');
+  await fresh.stop();
+
+  const srv = await start({ hostGraceMs: 0 });
+  const { created } = await createRoom(srv.url);
+  await failJoins(srv.url, 20);
+  // Now even the right code is refused for the rest of the minute.
+  const late = sock(srv.url);
+  late.send({ t: 'join', v: 1, room: created.room, slot: 1, token: T1 });
+  assert.equal((await late.next()).code, 'rate-limited');
+  assert.equal(await late.closed, 4000);
+  await assert.rejects(join({ server: srv.url, room: created.room, slot: 1 }), { code: 'rate-limited' });
+  await srv.stop();
+});

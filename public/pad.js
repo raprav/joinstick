@@ -35,6 +35,7 @@ function showError(err, room, slot) {
     'bad-slot': ['No such player', `Room ${room} has no player ${slot}.`, [['Take a free spot', go(`/j/${room}`)]]],
     kicked: ['You were removed', 'The game disconnected this controller.', [['Join again', reload]]],
     'room-closed': ['Game closed', 'The game has ended.', [['Join another game', go('/j')]]],
+    'rate-limited': ['Too many tries', 'Too many wrong codes from this network. Wait a minute and try again.', [['Retry', reload]]],
     replaced: ['Opened somewhere else', `Player ${slot} is now controlled from another tab or phone.`, [['Take it back', reload]]],
     unreachable: ["Can't reach the game", 'Make sure this phone is on the same Wi-Fi as the game.', [['Retry', reload]]],
   };

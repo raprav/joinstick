@@ -161,7 +161,11 @@ The first join and a rejoin are the same message. Outcomes:
   gets fatal `replaced`.
 - Slot occupied by **another token** → `{t:'error', code:'slot-taken', free:[2,3]}`.
 
-After 5 failed joins on one socket the server closes it.
+After 5 failed joins on one socket the server closes it. After 20 failed
+joins from one client address within a minute, every further `join` from
+that address gets fatal `rate-limited` until the minute is over. Failures in
+the first minute after the server starts are not counted: phones are still
+waiting for their game to recreate its room.
 
 ### `input`
 
@@ -219,6 +223,7 @@ resumes with a different layout or with `resetPads`.
 | `room-closed` | yes | Host gone for 60 s; room deleted. |
 | `version` | yes | `v` is not 1. |
 | `server-full` | yes | Room limit reached (1000 total, 20 per client address). |
+| `rate-limited` | yes | 20 failed joins from this client address in the last minute. |
 
 "Fatal" means the server closes the socket right after the error. Failed
 joins (the non-fatal join errors) count toward the 5-failure limit.
