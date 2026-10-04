@@ -528,3 +528,46 @@ test('one address cannot create more than 20 rooms', async () => {
   assert.deepEqual(last.created, { t: 'error', code: 'server-full' });
   await srv.stop();
 });
+
+test('layout options: orientation, arrangement, haptics, sizes and system buttons', async () => {
+  session.clear();
+  const srv = await start();
+  const layout = {
+    orientation: 'any',
+    arrangement: 'arc',
+    haptics: false,
+    buttons: [
+      { id: 'punch', label: 'PUNCH', haptic: 20 },
+      { id: 'block', label: 'BLOCK', size: 'wide', haptic: 0 },
+      { id: 'start', label: 'START', system: true },
+    ],
+  };
+  const room = await host({ server: srv.url, layout });
+  const pad = await join({ server: srv.url, room: room.code, slot: 1 });
+  assert.deepEqual(pad.layout, { stick: 'dpad', ...layout });
+  await until(() => room.connected(1));
+  // System buttons report like any other button.
+  const msgs = [];
+  room.on('message', (e) => msgs.push(e));
+  pad.setInput({ buttons: { start: true } });
+  pad.send('sent after the input');
+  await until(() => msgs.length);
+  assert.deepEqual(room.input(1), { x: 0, y: 0, buttons: { punch: false, block: false, start: true }, pressed: { start: true } });
+  pad.leave();
+  room.close();
+
+  const bad = [
+    [{ orientation: 'sideways' }, /orientation/],
+    [{ arrangement: 'circle' }, /arrangement/],
+    [{ haptics: 'yes' }, /haptics/],
+    [{ buttons: [{ id: 'a', size: 'huge' }] }, /size/],
+    [{ buttons: [{ id: 'a', haptic: 500 }] }, /haptic/],
+    [{ buttons: [{ id: 'a', system: 'yes' }] }, /system/],
+  ];
+  for (const [l, re] of bad) {
+    const h = sock(srv.url);
+    h.send({ t: 'create', v: 1, layout: l });
+    assert.match((await h.next()).message, re, JSON.stringify(l));
+  }
+  await srv.stop();
+});

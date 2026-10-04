@@ -8,7 +8,7 @@ import { isLoopback, lanAddresses } from './lan.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
-const SDK_FILES = new Set(['host.js', 'host.d.ts', 'client.js', 'client.d.ts', 'link.js', 'pad.js', 'pad.css']);
+const SDK_FILES = new Set(['host.js', 'host.d.ts', 'client.js', 'client.d.ts', 'link.js', 'pad.js', 'pad-layout.js', 'pad.css']);
 
 const LETTERS = 'BCDFGHJKLMNPQRSTVWXZ';
 const CODE = /^[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
@@ -66,6 +66,19 @@ function parseLayout(l) {
   check(isObj(l), 'layout must be an object');
   const stick = l.stick ?? 'dpad';
   check(stick === 'dpad' || stick === 'none', "layout.stick must be 'dpad' or 'none'");
+  const extra = {};
+  if (l.orientation !== undefined) {
+    check(['landscape', 'portrait', 'any'].includes(l.orientation), "layout.orientation must be 'landscape', 'portrait' or 'any'");
+    extra.orientation = l.orientation;
+  }
+  if (l.arrangement !== undefined) {
+    check(['grid', 'diamond', 'arc'].includes(l.arrangement), "layout.arrangement must be 'grid', 'diamond' or 'arc'");
+    extra.arrangement = l.arrangement;
+  }
+  if (l.haptics !== undefined) {
+    check(typeof l.haptics === 'boolean', 'layout.haptics must be a boolean');
+    extra.haptics = l.haptics;
+  }
   const list = l.buttons ?? [];
   check(Array.isArray(list) && list.length <= MAX_BUTTONS, `layout.buttons must be an array of at most ${MAX_BUTTONS}`);
   const seen = new Set();
@@ -77,13 +90,17 @@ function parseLayout(l) {
     const label = b.label ?? b.id;
     check(typeof label === 'string' && label.length <= 8, `button '${b.id}' label must be a string of at most 8 chars`);
     check(b.color === undefined || (typeof b.color === 'string' && COLOR.test(b.color)), `button '${b.id}' color must be a hex color`);
-    check(b.size === undefined || b.size === 'large', `button '${b.id}' size must be 'large' or omitted`);
+    check(b.size === undefined || b.size === 'large' || b.size === 'wide', `button '${b.id}' size must be 'large', 'wide' or omitted`);
+    check(b.haptic === undefined || (Number.isInteger(b.haptic) && b.haptic >= 0 && b.haptic <= 100), `button '${b.id}' haptic must be 0-100 ms`);
+    check(b.system === undefined || typeof b.system === 'boolean', `button '${b.id}' system must be a boolean`);
     const out = { id: b.id, label };
     if (b.color) out.color = b.color;
     if (b.size) out.size = b.size;
+    if (b.haptic !== undefined) out.haptic = b.haptic;
+    if (b.system) out.system = true;
     return out;
   });
-  return { stick, buttons };
+  return { stick, ...extra, buttons };
 }
 
 function parseIds(v, name) {
