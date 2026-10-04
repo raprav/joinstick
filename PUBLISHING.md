@@ -8,11 +8,12 @@ Nothing here is automated until step 4 is done.
 ```sh
 git switch main && git pull
 npm ci && npm test
-npm pack --dry-run            # only src/, public/, docs .md files, LICENSE, package.json
+npm pack --dry-run            # 21 files: src/, public/, README, LICENSE, AGENTS, PROTOCOL, CHANGELOG, THIRD_PARTY_NOTICES, llms.txt, package.json
 ```
 
-Set the date of the release in `CHANGELOG.md` (`## [0.1.0] - YYYY-MM-DD`)
-and commit.
+In `CHANGELOG.md`, replace `Unreleased` with the date (`## [0.1.0] -
+YYYY-MM-DD`), point the `[0.1.0]` link at
+`https://github.com/raprav/joinstick/releases/tag/v0.1.0`, and commit.
 
 ## 1. Make the GitHub repository public
 
@@ -22,14 +23,17 @@ and on npm) once the repository is public.
 
 Then in Settings:
 
-- **General**: Description: `Use phones as gamepads for browser games. Scan a
-  QR, play. Self-hosted, no accounts, no app install.` Website:
+- **General**: Description: `Use phones as gamepads for HTML5 browser games:
+  scan a QR, play. Self-hosted AirConsole alternative, no accounts, no app
+  install.` Website:
   `https://www.npmjs.com/package/joinstick`. Social preview: upload
   `docs/social.png` (1280x640).
-- **Topics**: `gamepad`, `controller`, `phone-controller`,
-  `mobile-controller`, `local-multiplayer`, `party-game`, `couch-coop`,
-  `qr-code`, `websocket`, `html5-game`, `browser-game`, `self-hosted`,
-  `nodejs`.
+- **Topics** (20, GitHub's maximum; same as the npm keywords): `gamepad`,
+  `controller`, `phone-controller`, `mobile-controller`, `phone-gamepad`,
+  `virtual-gamepad`, `touch-controls`, `local-multiplayer`, `multiplayer`,
+  `party-game`, `couch-coop`, `airconsole`, `airconsole-alternative`, `qr`,
+  `qr-code`, `websocket`, `html5`, `html5-game`, `browser-game`,
+  `self-hosted`.
 - **Code security**: enable *Private vulnerability reporting* (SECURITY.md
   points to it).
 - **Actions**: the CI workflow runs on the next push to `main`. Check it is

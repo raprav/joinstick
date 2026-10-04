@@ -5,11 +5,9 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). While the version
 is 0.x, a minor release may change the API; the changelog says how.
 
-## [Unreleased]
+## [0.1.0] - Unreleased
 
-## [0.1.0] - unreleased
-
-First public release.
+First public release. Not tagged or published yet.
 
 ### Added
 
@@ -28,8 +26,11 @@ First public release.
   upright; tap haptics (Android, best effort on iOS 18+); multi-touch.
 - Reconnection: phones that lock or drop Wi-Fi rejoin their slot; game page
   reloads and server restarts keep the room code (AGENTS.md has the details).
+- Room safety: 20 failed joins per minute per client address, then
+  `rate-limited`; per-address room cap; 4-letter room codes.
+- `--version` flag.
 - JSON/WebSocket protocol v1 (PROTOCOL.md), AGENTS.md for coding agents,
   TypeScript declarations, Dockerfile.
 
-[Unreleased]: https://github.com/raprav/joinstick/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/raprav/joinstick/releases/tag/v0.1.0
+<!-- When v0.1.0 is tagged, point this at releases/tag/v0.1.0. -->
+[0.1.0]: https://github.com/raprav/joinstick/commits/main
