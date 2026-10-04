@@ -1,6 +1,6 @@
 // Default gamepad page served at /j and /j/ROOM/SLOT. Built on client.js.
 import { join } from './client.js';
-import { arrange, direction, edgeDistance, rectToPad, rotation, toPad } from './pad-layout.js';
+import { arrange, direction, edgeDistance, rectToPad, rotation, tapLength, toPad } from './pad-layout.js';
 
 const COLOR = /^#[0-9a-f]{3,8}$/i;
 const PALETTE = ['#e5484d', '#3e9bff', '#30a46c', '#f5a524', '#8e4ec6', '#e54d9e', '#12a594', '#f76b15'];
@@ -98,7 +98,7 @@ function play(pad) {
   $('slot').textContent = `P${pad.slot}`;
   $('hero').textContent = `P${pad.slot}`;
 
-  const haptic = (id) => (layout.haptics === false ? 0 : id === 'stick' ? 6 : (layout.buttons.find((b) => b.id === id)?.haptic ?? 10));
+  const haptic = (id) => tapLength(layout, id);
 
   function render() {
     const key = JSON.stringify(pad.layout);

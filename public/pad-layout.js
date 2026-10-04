@@ -1,5 +1,5 @@
 // Pure geometry for the pad page (no DOM): d-pad sectors, the rotation used to
-// force an orientation, and button arrangements. Tested in test/pad-layout.test.js.
+// force an orientation, button arrangements and haptic tick lengths. Tested in test/pad-layout.test.js.
 
 // Up needs a clearly upward angle (30°-150°) so a resting thumb does not
 // jump by accident; the other sectors are the usual 45°. 0° = right, 90° = up.
@@ -21,6 +21,14 @@ export function rotation(mode, w, h) {
   if (mode === 'landscape' && h > w) return 90;
   if (mode === 'portrait' && w > h) return -90;
   return 0;
+}
+
+// Local haptic tick in ms for a button press, or 'stick' for a d-pad
+// direction change. 0 = none.
+export function tapLength(layout, id) {
+  if (layout.haptics === false) return 0;
+  if (id === 'stick') return 6;
+  return layout.buttons.find((b) => b.id === id)?.haptic ?? 10;
 }
 
 // Viewport point -> pad point. The pad is drawn with

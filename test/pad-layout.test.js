@@ -1,6 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GAP, arrange, direction, edgeDistance, rectToPad, rotation, toPad } from '../public/pad-layout.js';
+import { GAP, arrange, direction, edgeDistance, rectToPad, rotation, tapLength, toPad } from '../public/pad-layout.js';
+
+test('haptics: default ticks, per-button override, layout switch', () => {
+  const layout = { buttons: [{ id: 'a' }, { id: 'b', haptic: 25 }, { id: 'c', haptic: 0 }] };
+  assert.equal(tapLength(layout, 'a'), 10);
+  assert.equal(tapLength(layout, 'b'), 25);
+  assert.equal(tapLength(layout, 'c'), 0);
+  assert.equal(tapLength(layout, 'stick'), 6);
+  for (const id of ['a', 'b', 'stick']) assert.equal(tapLength({ ...layout, haptics: false }, id), 0);
+});
 
 test('d-pad: up needs a clearly upward angle', () => {
   assert.deepEqual(direction(0), { x: 1, y: 0 });
