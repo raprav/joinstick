@@ -1,12 +1,12 @@
 # Joinstick
 
-> Turn phones into gamepads for browser games. The game page (host) shows one QR code per player slot; scanning it opens a controller page on the phone. Self-hosted Node server (`src/cli.js`; not on npm yet), plain ESM browser SDKs, JSON over WebSocket.
+> Turn phones into gamepads for browser games. The game page (host) shows one QR code per player slot; scanning it opens a controller page on the phone. Self-hosted Node server (`npx joinstick`), plain ESM browser SDKs, JSON over WebSocket.
 
 Full guide: AGENTS.md. Wire format: PROTOCOL.md. Types: /joinstick/host.d.ts, /joinstick/client.d.ts (all in the npm package and at https://github.com/raprav/joinstick).
 
 ## Run
 
-Not on npm yet: clone https://github.com/raprav/joinstick, `npm install`, then `node joinstick/src/cli.js --static ./my-game` serves the game and Joinstick on http://localhost:3000 (or `npm i <git url or checkout path>`, then `npx joinstick`). Node 22+. Phones must be on the same Wi-Fi. Flags: `--port` (PORT, default 3000), `--static <dir>`, `--public-url <url>` (PUBLIC_URL; base URL phones open, an origin without a path, for tunnels/Docker/proxies).
+`npx joinstick --static ./my-game` serves the game and Joinstick on http://localhost:3000 (or `npm i joinstick`, then `npx joinstick`). Node 22+. Phones must be on the same Wi-Fi. Flags: `--port` (PORT, default 3000), `--static <dir>`, `--public-url <url>` (PUBLIC_URL; base URL phones open, an origin without a path, for tunnels/Docker/proxies).
 
 ## Integrate
 
@@ -68,7 +68,7 @@ pad.setInput({ x, y, buttons: { a: true } }); pad.send(data); pad.on('message'|'
 
 ## Error codes
 
-room-not-found, slot-taken (with free: [slots]), bad-slot, bad-message (with message), replaced, kicked, room-closed (host gone 60 s), version, server-full (1000 rooms, or 20 from one address); client-only: unreachable.
+room-not-found, slot-taken (with free: [slots]), bad-slot, bad-message (with message), replaced, kicked, room-closed (host gone 60 s), version, server-full (1000 rooms, or 20 from one address), rate-limited (20 failed joins from one address in a minute); client-only: unreachable.
 
 ## Pitfalls
 

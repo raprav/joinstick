@@ -8,12 +8,11 @@ contract. Wire format: [PROTOCOL.md](PROTOCOL.md). Types:
 
 ## 1. Run the server
 
-Joinstick is **not on npm yet**. Run it from a checkout (Node 22+):
+Node 22+:
 
 ```sh
-git clone https://github.com/raprav/joinstick && (cd joinstick && npm install)
-node joinstick/src/cli.js --static ./my-game   # serves the game AND Joinstick on :3000
-# or add it to your project: npm i <git url or path to the checkout>, then npx joinstick --static ./my-game
+npx joinstick --static ./my-game   # serves the game AND Joinstick on :3000
+# or add it to your project: npm i joinstick, then npx joinstick --static ./my-game
 ```
 
 Open `http://localhost:3000/` on the computer. Phones must be on the same
@@ -261,7 +260,7 @@ Routes: WebSocket `/joinstick/ws`; SDKs `/joinstick/host.js`,
 ### Game served elsewhere (Vite, another port)
 
 ```js
-import { host } from 'joinstick/host'; // npm i <git url or checkout path> (types included)
+import { host } from 'joinstick/host'; // npm i joinstick (types included)
 const room = await host({ slots: 2, server: `http://${location.hostname}:3000` });
 ```
 
@@ -319,6 +318,7 @@ address).
 | `room-closed` | The host was gone for 60 s; the room was deleted. |
 | `version` | Protocol version mismatch. |
 | `server-full` | 1000 rooms already exist, or this address already created 20. |
+| `rate-limited` | 20 failed joins from this address in a minute (code guessing); wait a minute. |
 | `unreachable` | Client SDK only: the server could not be reached. |
 
 ## 11. Pitfalls
