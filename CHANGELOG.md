@@ -5,9 +5,9 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). While the version
 is 0.x, a minor release may change the API; the changelog says how.
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-10-04
 
-First public release. Not tagged or published yet.
+First public release.
 
 ### Added
 
@@ -32,5 +32,4 @@ First public release. Not tagged or published yet.
 - JSON/WebSocket protocol v1 (PROTOCOL.md), AGENTS.md for coding agents,
   TypeScript declarations, Dockerfile.
 
-<!-- When v0.1.0 is tagged, point this at releases/tag/v0.1.0. -->
-[0.1.0]: https://github.com/raprav/joinstick/commits/main
+[0.1.0]: https://github.com/raprav/joinstick/releases/tag/v0.1.0
