@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import { parseArgs } from 'node:util';
 import { attach } from './server.js';
@@ -12,7 +13,9 @@ Options:
   --port <n>          Port to listen on (default: $PORT or 3000)
   --static <dir>      Also serve this directory (your game) on the same port
   --public-url <url>  Base URL phones should open, e.g. https://abc.trycloudflare.com
-                      (default: $PUBLIC_URL, else the detected LAN address)
+                      (default: $PUBLIC_URL, else the address the game page was
+                      opened with, else the detected LAN address)
+  -v, --version       Print the version
   -h, --help          Show this help
 `;
 
@@ -24,11 +27,16 @@ try {
       static: { type: 'string' },
       'public-url': { type: 'string' },
       help: { type: 'boolean', short: 'h' },
+      version: { type: 'boolean', short: 'v' },
     },
   }).values;
 } catch (err) {
   console.error(`${err.message}\n\n${HELP}`);
   process.exit(1);
+}
+if (args.version) {
+  console.log(JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);
+  process.exit(0);
 }
 if (args.help) {
   console.log(HELP);
