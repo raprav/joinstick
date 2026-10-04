@@ -1,7 +1,7 @@
 {
   "name": "joinstick",
   "version": "0.1.0",
-  "description": "Use phones as gamepads for HTML5 browser games: scan a QR, play. Self-hosted AirConsole alternative, no accounts, no app install.",
+  "description": "Use phones as gamepads for HTML5 browser games: scan a QR, play. Self-hosted and open source, no accounts, no app install.",
   "license": "MIT",
   "author": {
     "name": "Rafa Prats",
@@ -27,8 +27,8 @@
     "multiplayer",
     "party-game",
     "couch-coop",
-    "airconsole",
-    "airconsole-alternative",
+    "smartphone-controller",
+    "game-controller",
     "qr",
     "qr-code",
     "websocket",

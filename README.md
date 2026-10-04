@@ -3,8 +3,7 @@
 **Use phones as gamepads for browser games.** The game shows a QR code, each
 player scans it, and their phone becomes a controller. No accounts, no app
 install: one small self-hosted Node server and a few lines in your game. Made
-for local multiplayer and party games on a laptop or TV: an open-source,
-self-hosted take on AirConsole-style phone controllers, for your own game.
+for local multiplayer and party games on a laptop or TV.
 
 [![npm](https://img.shields.io/npm/v/joinstick)](https://www.npmjs.com/package/joinstick)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)

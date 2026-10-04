@@ -24,14 +24,14 @@ and on npm) once the repository is public.
 Then in Settings:
 
 - **General**: Description: `Use phones as gamepads for HTML5 browser games:
-  scan a QR, play. Self-hosted AirConsole alternative, no accounts, no app
+  scan a QR, play. Self-hosted and open source, no accounts, no app
   install.` Website:
   `https://www.npmjs.com/package/joinstick`. Social preview: upload
   `docs/social.png` (1280x640).
 - **Topics** (20, GitHub's maximum; same as the npm keywords): `gamepad`,
   `controller`, `phone-controller`, `mobile-controller`, `phone-gamepad`,
   `virtual-gamepad`, `touch-controls`, `local-multiplayer`, `multiplayer`,
-  `party-game`, `couch-coop`, `airconsole`, `airconsole-alternative`, `qr`,
+  `party-game`, `couch-coop`, `smartphone-controller`, `game-controller`, `qr`,
   `qr-code`, `websocket`, `html5`, `html5-game`, `browser-game`,
   `self-hosted`.
 - **Code security**: enable *Private vulnerability reporting* (SECURITY.md
