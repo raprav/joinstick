@@ -98,14 +98,15 @@ function arc(list) {
   while (rest.length) {
     const size = Math.max(...rest.map(diameter));
     const radius = inner + GAP + size / 2;
-    const step = 2 * Math.asin(Math.min(1, (size + GAP) / (2 * radius)));
-    const from = Math.PI; // straight left of the anchor
-    const to = (80 * Math.PI) / 180;
-    const fit = Math.max(1, Math.floor((from - to) / step) + 1);
-    rest.slice(0, fit).forEach((b, i) => {
-      const a = from - i * step;
+    const end = (80 * Math.PI) / 180;
+    let a = Math.PI; // straight left of the anchor
+    let fit = 0;
+    while (fit < rest.length && a >= end) {
+      const b = rest[fit];
       out.push({ id: b.id, x: radius * Math.cos(a), y: -radius * Math.sin(a), w: diameter(b), h: diameter(b) });
-    });
+      const next = rest[++fit];
+      if (next) a -= 2 * Math.asin(Math.min(1, ((diameter(b) + diameter(next)) / 2 + GAP) / (2 * radius)));
+    }
     rest = rest.slice(fit);
     inner = radius + size / 2;
   }
