@@ -13,31 +13,55 @@ self-hosted take on AirConsole-style phone controllers, for your own game.
 
 <p align="center"><img src="https://raw.githubusercontent.com/raprav/joinstick/main/docs/hero.png" alt="Left: the example game on a laptop, showing a room code, two moving squares and a QR code per player. Right: a phone held sideways showing the Joinstick pad with a d-pad and two buttons." width="800"></p>
 
-## Quick start in 30 seconds
+## Quick start
 
-```sh
-npx joinstick --static ./my-game
-```
-
-That serves your game on `http://localhost:3000` and the phone controllers
-on the same port. In your game page:
+Save this as `my-game/index.html`:
 
 ```html
-<img id="qr">
+<!doctype html>
+<meta charset="utf-8">
+<img id="qr" width="240">
 <script type="module">
   import { host } from '/joinstick/host.js';
-  const room = await host({ slots: 2 });       // default pad: d-pad + A, B
+  const room = await host({ slots: 2 });          // default pad: d-pad + A, B
   document.getElementById('qr').src = room.qr(1); // player 1 scans this
   (function frame() {
-    const p1 = room.input(1);                    // { x, y, buttons, pressed }, never undefined
-    if (p1.pressed.a) console.log('jump!');      // x, y in [-1, 1]; pressed = went down since last read
+    const p1 = room.input(1);                     // { x, y, buttons, pressed }, never undefined
+    if (p1.pressed.a) console.log('jump!');       // x, y in [-1, 1]; pressed = went down since last read
     requestAnimationFrame(frame);
   })();
 </script>
 ```
 
-Scan the QR with a phone on the same Wi-Fi and play. To see a complete game
-first, clone this repo, `npm install` and run `node src/cli.js --static examples/basic`.
+Then run (Node 22 or newer):
+
+```sh
+npx joinstick --static ./my-game
+```
+
+Open `http://localhost:3000` on the computer, scan the QR with a phone on the
+same Wi-Fi, and press A. Embedding in your own Node server or using
+TypeScript: `npm i joinstick`. A complete example game is in
+[`examples/basic`](examples/basic).
+
+### Using a bundler or your own dev server
+
+Run Joinstick on its own port next to your dev server (Vite, webpack...) and
+tell the SDK where it is:
+
+```sh
+npm i joinstick
+npx joinstick                 # Joinstick alone on :3000
+```
+
+```js
+import { host } from 'joinstick/host'; // typed
+
+const room = await host({ slots: 2, server: `http://${location.hostname}:3000` });
+```
+
+QR codes then point at that server. If your dev server uses HTTPS, Joinstick
+needs HTTPS too (see Self-hosting).
 
 ## How it works
 
@@ -62,7 +86,7 @@ it on the internet.
   a 4-letter code) opens the controller in the phone's browser.
 - **Small and self-hosted**: one Node process, two runtime dependencies
   (`ws`, `uqr`), plain ES modules in the browser, no build step.
-- **Survives real life**: phones that lock or drop Wi-Fi leave and rejoin
+- **Reconnects automatically**: phones that lock or drop Wi-Fi leave and rejoin
   their own slot; game page reloads and server restarts keep the room code.
   Your game gets `join`/`leave` events to pause and resume.
 - **Configurable pad**: d-pad plus up to 8 buttons with labels, colors and
@@ -105,12 +129,14 @@ a button, tap another). Full schema in [AGENTS.md](AGENTS.md#5-layout).
 
 | Game side (`/joinstick/host.js`) | |
 |---|---|
-| `host({ slots, layout })` | Create (or after a reload, resume) a room. |
+| `host({ slots, layout, server })` | Create (or after a reload, resume) a room. `server` is the Joinstick URL when the game is served elsewhere. |
 | `room.input(n)` | `{ x, y, buttons, pressed }` for player `n`. Read it every frame. |
 | `room.qr(n)`, `room.joinUrl(n)` | QR image URL and plain join link for player `n`. |
 | `room.connected(n)`, `room.on('join' \| 'leave', fn)` | Who is here; pause when someone drops. |
 | `room.pad(n, { title, color, highlight, disabled, vibrate })` | Change what a phone shows. |
-| `room.send(n, data)`, `room.on('message', fn)` | Custom messages both ways. |
+| `room.send(n, data)`, `room.broadcast(data)`, `room.on('message', fn)` | Custom messages both ways. |
+| `room.kick(n)`, `room.close()` | Remove a player; end the room. |
+| `room.on('status' \| 'error', fn)` | Connection to the server (`connected`, `reconnecting`...) and fatal errors. |
 
 | Server side (`import { attach } from 'joinstick'`) | |
 |---|---|
@@ -124,14 +150,15 @@ phones): [AGENTS.md](AGENTS.md).
 ## CLI
 
 ```
-joinstick [--port 3000] [--static ./dir] [--public-url URL]
+joinstick [--port 3000] [--static ./dir] [--public-url URL] [--version]
 ```
 
 | Flag | Env | |
 |---|---|---|
 | `--port` | `PORT` | Port to listen on. Default 3000. |
 | `--static <dir>` | | Also serve your game from this directory. |
-| `--public-url <url>` | `PUBLIC_URL` | Origin phones should open (no path). Default: the detected LAN address. |
+| `--public-url <url>` | `PUBLIC_URL` | Origin that QR codes and join links use (no path). Default: the host the game page connected with, unless it is `localhost`/loopback; then the detected LAN address. |
+| `-v`, `--version` | | Print the version. |
 
 ## Self-hosting
 
@@ -151,8 +178,8 @@ joinstick [--port 3000] [--static ./dir] [--public-url URL]
   ```
 
 - **Docker**: the repo has a small [Dockerfile](Dockerfile) (non-root,
-  Node 22 Alpine). Inside a container the LAN address cannot be detected, so
-  pass `--public-url`:
+  Node 22 Alpine; it is not in the npm package). Inside a container the LAN
+  address cannot be detected, so pass `--public-url`. From a clone of the repo:
 
   ```sh
   docker build -t joinstick .
@@ -168,9 +195,23 @@ that URL as `--public-url`. Remote phones then join like local ones.
 
 What it does not do: Joinstick only carries controller input. Remote players
 still need to see the game (screen sharing, a video call). Input is relayed
-through your server, so expect their latency to the server, not peer to
-peer. Room codes are 4 letters and there is no other authentication: fine
-among friends, not for anything secret.
+through your server, not peer to peer, so each remote player adds their
+network delay to the server.
+
+Security on a public URL, plainly:
+
+- The room code is the only credential. Codes are 4 letters from 20
+  consonants, so 160,000 possible codes. Anyone who guesses a live code can
+  take a **free** slot (a taken slot also needs that phone's secret token).
+- Guessing is slowed down: after 20 failed joins in a minute, an address is
+  refused for the rest of that minute (not counted in the first minute after
+  the server starts, while phones rejoin). Behind a tunnel or proxy every phone
+  shares the proxy's address, so a guesser also delays real players by up to
+  a minute.
+- The server does not check the `Origin` header: any web page that knows the
+  server's address can open a connection to it, like any other client.
+
+Fine for playing with friends; not for anything secret.
 
 ## For AI coding agents
 
@@ -193,9 +234,28 @@ game-driven vibration. iOS Safari has no vibration API; on iOS 18+ the pad
 plays the system's single haptic tick on presses as a best effort (length is
 ignored, game-driven vibration does nothing). Older iOS and desktops: none.
 
-**Which browsers?** The pad needs Pointer Events, ES modules and WebSocket,
-which current mobile Safari, Chrome and Firefox have. The game page needs
-the same minus Pointer Events.
+**How much latency?** Input is sent the moment it changes, with no polling or
+batching. On a LAN the delay is about one Wi-Fi hop from the phone to the
+laptop. The server's own relay is small: measured on loopback (pad socket to
+server to game socket, same machine, 500 inputs) the median was 0.06 ms. We
+have not published phone-to-screen numbers.
+
+**Which browsers?**
+
+| | Chrome / Android | Safari / iOS | Firefox | Samsung Internet |
+|---|---|---|---|---|
+| Phone pad | 87 | 14.5 | 79 | 14 |
+| Game page (`host.js`) | 93 | 15.4 | 92 | 17 |
+
+Derived, not tested on each version: these are the first versions that
+support the newest feature each side needs, looked up in MDN's
+[browser-compat-data](https://github.com/mdn/browser-compat-data) 8.1.4. Pad:
+CSS `inset` (Chrome 87, iOS 14.5), `??=` (Firefox 79), plus Pointer Events,
+ES modules and WebSocket. Game page: `Object.hasOwn` in `host.js`; the
+Quick start snippet also uses top-level `await` (Chrome 89, Safari 15,
+Firefox 89). Newer browsers additionally get `color-mix()` colors (Chrome 111,
+Safari 16.2, Firefox 113); older ones show plainer colors. The iOS haptic tick
+needs iOS 18.
 
 **Limits?** 8 players per room, 8 buttons per pad, 1000 rooms per server
 (20 per IP address), 8 KB per message. A room closes 60 s after the game page
