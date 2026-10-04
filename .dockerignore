@@ -1,0 +1,10 @@
+*
+!package.json
+!package-lock.json
+!src/
+!public/
+!llms.txt
+!AGENTS.md
+!PROTOCOL.md
+!LICENSE
+!THIRD_PARTY_NOTICES.md
