@@ -57,7 +57,7 @@ body { position: fixed; inset: 0; }
 
 .bar {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   padding: 8px 16px 8px 24px;
@@ -114,6 +114,7 @@ body { position: fixed; inset: 0; }
   color: var(--muted);
   font: inherit;
   font-size: 13px;
+  white-space: nowrap;
   touch-action: none;
 }
 .leave::before {
@@ -148,6 +149,7 @@ body { position: fixed; inset: 0; }
   letter-spacing: -0.04em;
 }
 #pad.tall .hero { display: grid; }
+#pad.tall .code { display: none; } /* narrow bar; the code is on the game screen */
 #pad.tall .controls { flex: none; padding-bottom: max(10vmax, 24px); }
 #pad:not(.tall) { --dpad: min(48vmin, 230px); }
 
