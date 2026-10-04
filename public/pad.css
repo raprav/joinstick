@@ -6,7 +6,6 @@
   --muted: #8a90a2;
   --accent: #3e9bff;
   --dpad: min(42vmin, 200px);
-  --btn: min(19vmin, 88px);
   color-scheme: dark;
 }
 
@@ -37,14 +36,53 @@ body { position: fixed; inset: 0; }
   touch-action: none;
   background: radial-gradient(120% 80% at 50% 100%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%), var(--bg);
 }
+/* Wrong orientation for the layout: draw the pad rotated (see pad-layout.js).
+   The safe-area insets rotate with it. */
+#pad.rot90, #pad.rot-90 {
+  inset: auto;
+  top: 0;
+  left: 0;
+  width: var(--vh);
+  height: var(--vw);
+  transform-origin: 0 0;
+}
+#pad.rot90 {
+  transform: translateX(var(--vw)) rotate(90deg);
+  padding: env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left) env(safe-area-inset-top);
+}
+#pad.rot-90 {
+  transform: translateY(var(--vh)) rotate(-90deg);
+  padding: env(safe-area-inset-left) env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom);
+}
 
 .bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 10px;
-  padding: 10px 16px 10px max(24px, env(safe-area-inset-left));
+  padding: 8px 16px 8px 24px;
   border-bottom: 1px solid var(--line);
 }
+.side { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.side.end { justify-content: flex-end; }
+.system { display: flex; gap: 10px; }
+/* START, MENU...: small pills in the middle of the bar, away from the thumbs. */
+.sys {
+  min-width: 64px;
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: center;
+  white-space: nowrap;
+  touch-action: none;
+}
+.sys.down, .sys.glow { background: var(--accent); border-color: transparent; color: #fff; }
+.sys.off { opacity: 0.25; }
 .slot {
   padding: 3px 10px;
   border-radius: 8px;
@@ -96,7 +134,7 @@ body { position: fixed; inset: 0; }
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px max(28px, env(safe-area-inset-right)) 16px max(24px, env(safe-area-inset-left));
+  padding: 16px 28px 16px 24px;
 }
 .controls:has(.dpad[hidden]) { justify-content: center; }
 /* Portrait has spare room above the thumbs: show who you are, big. */
@@ -109,10 +147,9 @@ body { position: fixed; inset: 0; }
   font-weight: 900;
   letter-spacing: -0.04em;
 }
-@media (orientation: portrait) {
-  .hero { display: grid; }
-  .controls { flex: none; padding-bottom: max(10vh, 24px); }
-}
+#pad.tall .hero { display: grid; }
+#pad.tall .controls { flex: none; padding-bottom: max(10vmax, 24px); }
+#pad:not(.tall) { --dpad: min(48vmin, 230px); }
 
 .dpad {
   position: relative;
@@ -136,37 +173,22 @@ body { position: fixed; inset: 0; }
 .arm.right { top: 34%; right: 8%;   width: 26%; height: 32%; border-radius: 0 10px 10px 0; }
 .arm.on { background: var(--accent); box-shadow: 0 0 18px var(--accent); }
 
-.buttons {
-  display: grid;
-  grid-template-columns: repeat(var(--cols, 2), var(--btn));
-  gap: 14px;
-  place-items: center;
-}
-/* Stagger columns like an arcade panel. */
-.buttons .btn:nth-child(odd) { margin-top: calc(var(--btn) * 0.35); }
-@media (orientation: landscape) {
-  :root { --dpad: min(48vmin, 230px); --btn: min(23vmin, 100px); }
-  .buttons.many { grid-template-columns: repeat(var(--wide), var(--btn)); --btn: min(20vmin, 88px); }
-  .buttons.many .btn { margin-top: 0; }
-}
+/* pad.js places, sizes and labels each button (layout.arrangement). */
+.buttons { position: relative; flex: none; }
 
 .btn {
-  position: relative;
+  position: absolute;
   display: grid;
   place-items: center;
-  width: var(--btn);
-  height: var(--btn);
-  border-radius: 50%;
+  border-radius: 999px;
   background: var(--c);
   color: #fff;
   font-weight: 800;
-  font-size: calc(var(--btn) * 0.28);
   text-shadow: 0 1px 2px #0008;
   box-shadow: inset 0 -6px 0 #0004, 0 6px 16px #0006;
   white-space: nowrap;
   transition: transform 60ms, filter 60ms, box-shadow 60ms;
 }
-.btn.large { width: calc(var(--btn) * 1.2); height: calc(var(--btn) * 1.2); }
 .btn.down { transform: scale(0.92); filter: brightness(1.25); box-shadow: inset 0 3px 0 #0004, 0 2px 6px #0006; }
 .btn.off { opacity: 0.25; filter: grayscale(1); }
 /* Highlight must be obvious mid-fight: bright solid fill, a white ring that
@@ -184,7 +206,7 @@ body { position: fixed; inset: 0; }
   position: absolute;
   inset: -4px;
   border: 4px solid #fff;
-  border-radius: 50%;
+  border-radius: 999px;
   pointer-events: none;
   animation: ring 1s ease-out infinite;
 }

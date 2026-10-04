@@ -1,5 +1,6 @@
 // Default gamepad page served at /j and /j/ROOM/SLOT. Built on client.js.
 import { join } from './client.js';
+import { arrange, direction, edgeDistance, rectToPad, rotation, toPad } from './pad-layout.js';
 
 const COLOR = /^#[0-9a-f]{3,8}$/i;
 const PALETTE = ['#e5484d', '#3e9bff', '#30a46c', '#f5a524', '#8e4ec6', '#e54d9e', '#12a594', '#f76b15'];
@@ -66,28 +67,28 @@ async function start(room, slot) {
   play(pad);
 }
 
-// Up needs a clearly upward angle (30°-150°) so a resting thumb does not
-// jump by accident; the other sectors are the usual 45°. 0° = right, 90° = up.
-function direction(deg) {
-  if (deg >= 30 && deg < 70) return { x: 1, y: -1 };
-  if (deg >= 70 && deg < 110) return { x: 0, y: -1 };
-  if (deg >= 110 && deg < 150) return { x: -1, y: -1 };
-  if (deg >= 150 || deg < -157.5) return { x: -1, y: 0 };
-  if (deg < -112.5) return { x: -1, y: 1 };
-  if (deg < -67.5) return { x: 0, y: 1 };
-  if (deg < -22.5) return { x: 1, y: 1 };
-  return { x: 1, y: 0 };
+// iOS Safari has no navigator.vibrate, but toggling a native switch control
+// plays the system haptic (iOS 18). Elsewhere this click does nothing visible.
+function buzz(ms) {
+  if (!ms) return;
+  if (navigator.vibrate) navigator.vibrate(ms);
+  else $('haptic').click();
 }
 
 function play(pad) {
   const main = $('pad');
   const controls = $('controls');
   const stickEl = $('stick');
+  const box = $('buttons');
   const buttons = new Map(); // id -> element
   const pointers = new Map(); // pointerId -> 'stick' | button id | null
+  let layout = pad.layout;
   let stick = { x: 0, y: 0 };
   let held = {};
   let disabled = new Set();
+  let placed = []; // arranged gameplay buttons, in units
+  let unit = 0; // px per unit
+  let rot = 0;
   let geo = null;
   let layoutKey = '';
 
@@ -97,43 +98,75 @@ function play(pad) {
   $('slot').textContent = `P${pad.slot}`;
   $('hero').textContent = `P${pad.slot}`;
 
+  const haptic = (id) => (layout.haptics === false ? 0 : id === 'stick' ? 6 : (layout.buttons.find((b) => b.id === id)?.haptic ?? 10));
+
   function render() {
     const key = JSON.stringify(pad.layout);
     if (key === layoutKey) return;
     layoutKey = key;
-    geo = null;
-    const { stick: kind, buttons: list } = pad.layout;
-    stickEl.hidden = kind === 'none';
-    const box = $('buttons');
+    layout = pad.layout;
+    stickEl.hidden = layout.stick === 'none';
     box.replaceChildren();
+    $('system').replaceChildren();
     buttons.clear();
-    list.forEach((b, i) => {
+    layout.buttons.forEach((b, i) => {
       const el = document.createElement('div');
-      el.className = b.size === 'large' ? 'btn large' : 'btn';
       const text = document.createElement('span');
       text.textContent = b.label; // layout comes from the host: text only, never HTML
       el.append(text);
-      el.style.setProperty('--c', COLOR.test(b.color ?? '') ? b.color : PALETTE[i % PALETTE.length]);
-      box.append(el);
+      if (b.system) {
+        el.className = 'sys';
+        bindSystem(el, b.id);
+        $('system').append(el);
+      } else {
+        el.className = 'btn';
+        el.style.setProperty('--c', COLOR.test(b.color ?? '') ? b.color : PALETTE[i % PALETTE.length]);
+        box.append(el);
+      }
       buttons.set(b.id, el);
     });
-    box.style.setProperty('--cols', list.length === 1 ? 1 : 2);
-    box.style.setProperty('--wide', Math.ceil(list.length / 2)); // landscape: two rows
-    box.classList.toggle('many', list.length > 4);
     release();
-    fitLabels();
+    place();
     applyState(pad.state, {});
   }
 
-  // Shrink each label until it fits inside its round button (labels are ≤ 8 chars).
-  function fitLabels() {
-    for (const el of buttons.values()) {
-      const text = el.firstChild;
-      if (!el.clientWidth) continue; // hidden: fitted again on the next render/resize
-      el.style.fontSize = '';
-      let size = parseFloat(getComputedStyle(el).fontSize);
-      while (text.offsetWidth > el.clientWidth * 0.78 && size > 9) el.style.fontSize = `${--size}px`;
+  // Rotate the pad if the viewport has the wrong orientation, then size and
+  // place the buttons in the space the stick leaves.
+  function place() {
+    const w = innerWidth;
+    const h = innerHeight;
+    rot = rotation(layout.orientation ?? 'landscape', w, h);
+    main.style.setProperty('--vw', `${w}px`);
+    main.style.setProperty('--vh', `${h}px`);
+    main.classList.toggle('rot90', rot === 90);
+    main.classList.toggle('rot-90', rot === -90);
+    const tall = (rot ? w : h) > (rot ? h : w);
+    main.classList.toggle('tall', tall);
+
+    const { items, width, height } = arrange(layout.buttons.filter((b) => !b.system), layout.arrangement, tall);
+    box.style.width = box.style.height = '0';
+    const cs = getComputedStyle(controls);
+    const px = (v) => parseFloat(v) || 0;
+    const availW = controls.clientWidth - px(cs.paddingLeft) - px(cs.paddingRight) - (stickEl.hidden ? 0 : stickEl.offsetWidth + px(cs.columnGap));
+    const availH = tall ? main.clientHeight * 0.42 : controls.clientHeight - px(cs.paddingTop) - px(cs.paddingBottom);
+    unit = Math.max(0, Math.min(Math.min(w, h) * 0.24, 100, availW / (width || 1), availH / (height || 1)));
+    box.style.width = `${width * unit}px`;
+    box.style.height = `${height * unit}px`;
+    for (const it of items) {
+      const el = buttons.get(it.id);
+      Object.assign(el.style, {
+        left: `${(it.x - it.w / 2) * unit}px`,
+        top: `${(it.y - it.h / 2) * unit}px`,
+        width: `${it.w * unit}px`,
+        height: `${it.h * unit}px`,
+      });
+      // Shrink the label until it fits inside the button (labels are ≤ 8 chars).
+      let size = Math.round(0.28 * unit * Math.max(1, Math.min(it.w, it.h)));
+      el.style.fontSize = `${size}px`;
+      while (el.firstChild.offsetWidth > el.clientWidth * 0.78 && size > 9) el.style.fontSize = `${--size}px`;
     }
+    placed = items;
+    geo = null;
   }
 
   function applyState(state, patch) {
@@ -145,40 +178,45 @@ function play(pad) {
       el.classList.toggle('glow', glow.has(id) && !disabled.has(id)); // disabled wins
       el.classList.toggle('off', disabled.has(id));
     }
-    if (patch.vibrate) navigator.vibrate?.(patch.vibrate);
-    else if (patch.highlight?.length) navigator.vibrate?.(40);
+    if (patch.vibrate) buzz(patch.vibrate);
+    else if (patch.highlight?.length) buzz(40);
     update();
   }
 
+  // Everything in pad coordinates, so a rotated pad needs no special cases.
   function measure() {
-    const s = stickEl.getBoundingClientRect();
-    const b = $('buttons').getBoundingClientRect();
+    const [w, h] = [innerWidth, innerHeight];
+    const s = rectToPad(stickEl.getBoundingClientRect(), rot, w, h);
+    const b = rectToPad(box.getBoundingClientRect(), rot, w, h);
     return {
       stick: { x: s.left + s.width / 2, y: s.top + s.height / 2, r: s.width / 2 },
-      split: stickEl.hidden ? -Infinity : (s.right + b.left) / 2,
-      buttons: [...buttons].map(([id, el]) => {
-        const r = el.getBoundingClientRect();
-        return { id, x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 };
-      }),
+      split: stickEl.hidden ? -Infinity : (s.left + s.width + b.left) / 2,
+      buttons: placed.map((it) => ({ id: it.id, x: b.left + it.x * unit, y: b.top + it.y * unit, w: it.w * unit, h: it.h * unit })),
+      // Larger than half of any gap between buttons: no dead spots between them.
+      slack: Math.max(16, unit / 2),
     };
   }
 
-  // Nearest enabled button under the finger, with some slack around each one.
-  function hit(e) {
+  const point = (e) => toPad(e.clientX, e.clientY, rot, innerWidth, innerHeight);
+
+  // Nearest enabled button under (or near) the finger.
+  function hit(p) {
     let best = null;
-    let bestD = Infinity;
+    let bestD = geo.slack;
     for (const b of geo.buttons) {
-      const d = Math.hypot(e.clientX - b.x, e.clientY - b.y);
-      if (d < b.r + 14 && d < bestD && !disabled.has(b.id)) [best, bestD] = [b.id, d];
+      const d = edgeDistance(p.x, p.y, b);
+      if (d < bestD && !disabled.has(b.id)) [best, bestD] = [b.id, d];
     }
     return best;
   }
 
-  function moveStick(e) {
+  function moveStick(p) {
     const { x, y, r } = geo.stick;
-    const dx = e.clientX - x;
-    const dy = e.clientY - y;
-    stick = Math.hypot(dx, dy) < r * 0.15 ? { x: 0, y: 0 } : direction((Math.atan2(-dy, dx) * 180) / Math.PI);
+    const dx = p.x - x;
+    const dy = p.y - y;
+    const next = Math.hypot(dx, dy) < r * 0.15 ? { x: 0, y: 0 } : direction((Math.atan2(-dy, dx) * 180) / Math.PI);
+    if ((next.x || next.y) && (next.x !== stick.x || next.y !== stick.y)) buzz(haptic('stick'));
+    stick = next;
   }
 
   function update() {
@@ -186,7 +224,7 @@ function play(pad) {
     for (const id of buttons.keys()) next[id] = false;
     for (const v of pointers.values()) if (v && v !== 'stick' && !disabled.has(v)) next[v] = true;
     for (const [id, el] of buttons) {
-      if (next[id] && !held[id]) navigator.vibrate?.(8);
+      if (next[id] && !held[id]) buzz(haptic(id));
       el.classList.toggle('down', next[id]);
     }
     held = next;
@@ -202,22 +240,36 @@ function play(pad) {
     update();
   }
 
+  // System buttons (START, MENU...) sit in the top bar, away from the thumbs.
+  function bindSystem(el, id) {
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      pointers.set(e.pointerId, id);
+      update();
+    });
+    // Touch pointers stay captured by the pill; a mouse releases it on leaving.
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
+      el.addEventListener(ev, (e) => pointers.delete(e.pointerId) && update());
+    }
+  }
+
   controls.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     geo ??= measure();
-    const id = hit(e);
+    const p = point(e);
+    const id = hit(p);
     const stickFree = ![...pointers.values()].includes('stick');
     if (id) pointers.set(e.pointerId, id);
-    else if (stickFree && e.clientX < geo.split) {
+    else if (stickFree && p.x < geo.split) {
       pointers.set(e.pointerId, 'stick');
-      moveStick(e);
+      moveStick(p);
     } else pointers.set(e.pointerId, null);
     update();
   });
   controls.addEventListener('pointermove', (e) => {
     if (!pointers.has(e.pointerId)) return;
-    if (pointers.get(e.pointerId) === 'stick') moveStick(e);
-    else pointers.set(e.pointerId, hit(e)); // sliding between buttons
+    if (pointers.get(e.pointerId) === 'stick') moveStick(point(e));
+    else pointers.set(e.pointerId, hit(point(e))); // sliding between buttons
     update();
   });
   for (const ev of ['pointerup', 'pointercancel']) {
@@ -228,14 +280,31 @@ function play(pad) {
     });
   }
   addEventListener('resize', () => {
-    geo = null;
     release();
-    fitLabels();
+    place();
   });
   addEventListener('blur', release);
   addEventListener('pagehide', release);
   document.addEventListener('touchcancel', release);
   document.addEventListener('visibilitychange', () => document.hidden && release());
+
+  // Where the browser allows it (Android Chrome), the first tap on a rotated
+  // pad goes fullscreen and locks the orientation; CSS rotation covers the rest.
+  let lockTried = false;
+  main.addEventListener(
+    'pointerdown',
+    () => {
+      if (lockTried || !rot || !matchMedia('(pointer: coarse)').matches) return;
+      lockTried = true;
+      const root = document.documentElement;
+      if (!root.requestFullscreen || !screen.orientation?.lock) return;
+      root
+        .requestFullscreen({ navigationUI: 'hide' })
+        .then(() => screen.orientation.lock(rot === 90 ? 'landscape' : 'portrait'))
+        .catch(() => {});
+    },
+    { capture: true },
+  );
 
   // Leaving is quick but not accidental: hold the button for 600 ms.
   const leave = $('leave');
@@ -245,7 +314,7 @@ function play(pad) {
     leaveTimer = setTimeout(() => {
       release();
       pad.leave();
-      navigator.vibrate?.(60);
+      buzz(60);
       main.hidden = true;
       screen('You left', `Player ${pad.slot} is free now.`, [['Join again', reload]]);
     }, 600);
