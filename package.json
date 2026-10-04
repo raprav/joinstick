@@ -1,27 +1,42 @@
 {
   "name": "joinstick",
   "version": "0.1.0",
-  "description": "Turn phones into gamepads for browser games. Scan a QR, play.",
+  "description": "Use phones as gamepads for browser games: scan a QR, play. Self-hosted, no accounts, no app install.",
   "license": "MIT",
-  "author": "Rafa Prats",
+  "author": {
+    "name": "Rafa Prats",
+    "url": "https://github.com/raprav"
+  },
+  "homepage": "https://github.com/raprav/joinstick#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/raprav/joinstick.git"
   },
+  "bugs": {
+    "url": "https://github.com/raprav/joinstick/issues"
+  },
   "keywords": [
     "gamepad",
     "controller",
-    "phone",
+    "phone-controller",
+    "mobile-controller",
+    "local-multiplayer",
+    "party-game",
+    "couch-coop",
+    "qr-code",
     "websocket",
-    "qr",
-    "couch",
-    "multiplayer",
-    "browser-game"
+    "html5-game",
+    "browser-game",
+    "self-hosted"
   ],
   "type": "module",
   "main": "src/server.js",
+  "types": "src/server.d.ts",
   "exports": {
-    ".": "./src/server.js",
+    ".": {
+      "types": "./src/server.d.ts",
+      "default": "./src/server.js"
+    },
     "./host": {
       "types": "./public/host.d.ts",
       "default": "./public/host.js"
@@ -40,7 +55,8 @@
     "public",
     "llms.txt",
     "AGENTS.md",
-    "PROTOCOL.md"
+    "PROTOCOL.md",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "engines": {
     "node": ">=22"
