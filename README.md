@@ -7,7 +7,7 @@ one small self-hosted Node server.
 Made for couch play on a laptop or TV, with a plain JSON/WebSocket protocol
 that also works for remote players.
 
-<p align="center"><img src="docs/pad-portrait.png" alt="The default pad page on a phone: d-pad on the left, colored buttons on the right" width="280"></p>
+<p align="center"><img src="docs/pad.png" alt="The default pad page on a phone held sideways: d-pad on the left, colored buttons on the right" width="560"></p>
 
 ## Quick start (30 seconds)
 
@@ -82,6 +82,11 @@ Or embed it in your own Node server with `import { attach } from 'joinstick'`
 - Phones that lock or lose Wi-Fi leave at once (the game can pause) and
   rejoin the same slot by themselves. Game page refreshes and server restarts
   are transparent: the room keeps its code.
+- The pad is landscape by default: held upright, it shows rotated, so it
+  works with the phone's rotation lock on. Buttons can be laid out as a grid,
+  a diamond or an arc around the thumb, with a wide bar for held actions and
+  START-style pills in the top bar. Presses give a short haptic tick
+  (Android; best effort on iOS 18+).
 - Anyone can type the URL instead: `http://<laptop-ip>:3000/j`, room code,
   player number.
 
@@ -91,7 +96,7 @@ remote clients use `/joinstick/client.js`.
 ## Remote play and HTTPS
 
 - Phones must reach the server. On a LAN, plain HTTP is fine (no wake lock,
-  no iOS fullscreen, vibration only on Android).
+  no iOS fullscreen; host-driven vibration only on Android).
 - For players outside your network, use a tunnel and tell Joinstick its URL:
 
   ```sh

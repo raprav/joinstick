@@ -108,10 +108,15 @@ makes `host()` reject with `code: 'bad-message'` and a message saying why.
 ```js
 {
   stick: 'dpad',                    // 'dpad' (default) or 'none'
+  orientation: 'landscape',         // 'landscape' (default), 'portrait' or 'any'
+  arrangement: 'grid',              // 'grid' (default), 'diamond' or 'arc'
+  haptics: true,                    // tap feedback on the phone (default true)
   buttons: [                        // 0-8 buttons; default: [{id:'a'},{id:'b'}]
     { id: 'punch', label: 'P', color: '#e5484d' },
-    { id: 'kick',  label: 'K' },
+    { id: 'kick',  label: 'K', haptic: 20 },
     { id: 'super', label: 'SUPER', size: 'large' },
+    { id: 'block', label: 'BLOCK', size: 'wide' },
+    { id: 'start', label: 'START', system: true },
   ],
 }
 ```
@@ -120,8 +125,33 @@ makes `host()` reject with `code: 'bad-message'` and a message saying why.
   name (`constructor`, `toString`, `__proto__`...). It is the key in `buttons`/`pressed`.
 - `label`: ≤ 8 chars (defaults to the id); the pad shrinks long labels to fit
   the round button, so short labels read best. `color`: `/^#[0-9a-f]{3,8}$/i`.
-- `size`: `'large'` or omitted.
-- Works in portrait and landscape (the pad page adapts; iOS cannot lock orientation).
+- `size`: `'large'` (bigger round button), `'wide'` (a long bar under the
+  others, easy to find blind and rest a thumb on: good for a held action) or omitted.
+- `system: true`: a small pill in the middle of the pad's top bar, away from
+  the thumbs (START, MENU, PAUSE). It reports in `buttons`/`pressed` like any
+  other button. The 8-button limit counts it.
+- `orientation`: with `'landscape'` (the default) a phone held upright shows
+  the pad rotated 90°, so the player turns the phone sideways; it works even
+  with the rotation lock on, and the d-pad ends up under the left thumb. On
+  Android Chrome the first tap also goes fullscreen and locks landscape.
+  `'portrait'` is the mirror case; `'any'` follows the phone.
+- `arrangement` (gameplay buttons only; order matters):
+  - `'grid'`: rows and columns, in order.
+  - `'diamond'`: buttons 1-4 as face buttons (bottom, left, right, top), the
+    rest in a column beside them.
+  - `'arc'`: button 1 is big and sits where the right thumb rests; the rest
+    fan out around it (left, then over the top). Put the most used action first.
+- Taps between buttons go to the nearest one: there are no dead gaps.
+
+**Haptics.** The pad gives a short tick on every button press and d-pad
+direction change (`haptics: false` turns it off; `haptic: ms` per button,
+0 = none). What actually works:
+
+| Phone | Tap feedback | `room.pad(n, { vibrate })` and highlight buzz |
+|---|---|---|
+| Android Chrome/Firefox | yes (`navigator.vibrate`) | yes |
+| iOS 18+ Safari | best effort: one fixed system tick per tap, via a hidden switch control; length is ignored | no |
+| iOS ≤ 17, desktop | no (fails silently) | no |
 
 ## 6. Change a pad while playing
 
@@ -297,8 +327,8 @@ address).
   phones cannot connect.
 - **Guest / hotel / office Wi-Fi** often isolates clients (AP isolation):
   phones cannot reach the laptop. Use a phone hotspot or `--public-url` with a tunnel.
-- **Plain HTTP on a LAN** works, but phones get no wake lock, no fullscreen on
-  iOS, and `vibrate` only works on Android.
+- **Plain HTTP on a LAN** works, but phones get no wake lock and no fullscreen
+  on iOS. Host-driven `vibrate` only works on Android (see Haptics in section 5).
 - **Mixed content:** a game page served over HTTPS cannot open `ws://` to a LAN
   server. Serve the game with `--static`, or put both behind HTTPS (tunnel +
   `--public-url`).

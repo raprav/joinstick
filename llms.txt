@@ -47,7 +47,12 @@ A locked/backgrounded phone leaves immediately and rejoins its slot when back (j
 
 ## Layout
 
-`{ stick: 'dpad' | 'none', buttons: [{ id, label?, color?, size?: 'large' }] }`, max 8 buttons. id `/^[A-Za-z0-9_-]{1,16}$/` unique, not an Object.prototype name (constructor, toString...); label ≤ 8 chars; color `/^#[0-9a-f]{3,8}$/i`. Default: d-pad + a, b. Invalid layout → host() rejects with code 'bad-message'.
+`{ stick: 'dpad' | 'none', orientation?: 'landscape' (default) | 'portrait' | 'any', arrangement?: 'grid' (default) | 'diamond' | 'arc', haptics?: true, buttons: [{ id, label?, color?, size?: 'large' | 'wide', haptic?: ms 0-100, system?: true }] }`, max 8 buttons (system ones included). id `/^[A-Za-z0-9_-]{1,16}$/` unique, not an Object.prototype name (constructor, toString...); label ≤ 8 chars; color `/^#[0-9a-f]{3,8}$/i`. Default: d-pad + a, b. Invalid layout → host() rejects with code 'bad-message'.
+- orientation 'landscape': a phone held upright shows the pad rotated 90° (works with the rotation lock on); Android Chrome also goes fullscreen and locks the orientation on the first tap.
+- arrangement: 'diamond' = first 4 buttons as face buttons (bottom, left, right, top), the rest beside them; 'arc' = first button big under the right thumb, the rest fanned around it.
+- size 'wide': a long bar under the other buttons (good for a held action like block).
+- system: true renders a small pill in the pad's top bar (START/MENU); it reports in input(n).buttons/pressed like any other button.
+- haptics: local tap feedback on press and d-pad direction change (Android: vibrate; iOS 18+: best-effort system tick; desktop: none). layout.haptics false turns it off; per-button haptic sets ms (0 = off).
 
 ## Host API
 
@@ -69,7 +74,7 @@ room-not-found, slot-taken (with free: [slots]), bad-slot, bad-message (with mes
 
 - First run: allow Node through the OS firewall prompt.
 - Guest/hotel Wi-Fi with client isolation blocks phones: use a hotspot or a tunnel.
-- Plain HTTP: vibrate works only on Android, no wake lock, no iOS fullscreen.
+- Plain HTTP: no wake lock, no iOS fullscreen. Host-driven vibrate (room.pad vibrate/highlight) works only on Android.
 - An HTTPS game page cannot reach a ws:// LAN server (mixed content): serve the game with --static or put both behind HTTPS.
 - Docker breaks LAN IP detection: use --public-url.
 - Remote play: `cloudflared tunnel --url http://localhost:3000`, then start Joinstick with `--public-url https://<name>.trycloudflare.com`. 4-letter room codes are guessable on a public URL; there is no other authentication.

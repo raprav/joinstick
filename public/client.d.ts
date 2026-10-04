@@ -67,7 +67,7 @@ export interface Pad {
   readonly room: string;
   readonly slot: number;
   /** Layout chosen by the host. Render labels with textContent only. */
-  readonly layout: Required<Layout>;
+  readonly layout: Layout & Required<Pick<Layout, 'stick' | 'buttons'>>;
   readonly state: PadState;
   readonly status: Status;
   /** Send the full current state. Cheap to call often: unchanged state is not resent. */

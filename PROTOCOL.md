@@ -47,7 +47,7 @@ message from the server.
 |---|---|
 | `v` | Must be `1`, else fatal `version`. |
 | `slots` | 1-8, default 2. |
-| `layout` | Optional. `stick`: `'dpad'` (default) or `'none'`. `buttons`: ≤ 8 of `{id, label?, color?, size?}`; `id` `/^[A-Za-z0-9_-]{1,16}$/`, unique, not an `Object.prototype` name; `label` ≤ 8 chars (default id), `color` `/^#[0-9a-f]{3,8}$/i`, `size` `'large'`. Default: d-pad + buttons `a`, `b`. |
+| `layout` | Optional. `stick`: `'dpad'` (default) or `'none'`. `orientation`: `'landscape'`, `'portrait'` or `'any'`. `arrangement`: `'grid'`, `'diamond'` or `'arc'`. `haptics`: boolean. `buttons`: ≤ 8 of `{id, label?, color?, size?, haptic?, system?}`; `id` `/^[A-Za-z0-9_-]{1,16}$/`, unique, not an `Object.prototype` name; `label` ≤ 8 chars (default id), `color` `/^#[0-9a-f]{3,8}$/i`, `size` `'large'` or `'wide'`, `haptic` integer ms 0-100, `system` boolean. Optional fields are echoed only when given; the pad applies the defaults (landscape, grid, haptics on, 10 ms). Default: d-pad + buttons `a`, `b`. |
 | `room`, `hostToken` | Optional, to resume. |
 | `resetPads` | Optional. `true` on resume clears every slot's pad state (the game was reloaded). The host SDK sends it on the first `create` of each `host()` call. |
 

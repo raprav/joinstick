@@ -2,8 +2,23 @@
 export interface Layout {
   /** 'dpad' (default) shows an 8-way d-pad on the left; 'none' hides it. */
   stick?: 'dpad' | 'none';
-  /** At most 8 buttons. */
+  /** At most 8 buttons, system buttons included. */
   buttons?: Button[];
+  /**
+   * 'landscape' (default): a phone held upright shows the pad rotated, so the
+   * player turns it sideways (works with the rotation lock on). 'portrait'
+   * does the opposite; 'any' follows the phone.
+   */
+  orientation?: 'landscape' | 'portrait' | 'any';
+  /**
+   * How the pad places the gameplay buttons. 'grid' (default): rows and columns.
+   * 'diamond': the first four as face buttons (bottom, left, right, top), the
+   * rest beside them. 'arc': the first button big under the thumb, the rest
+   * fanned around it.
+   */
+  arrangement?: 'grid' | 'diamond' | 'arc';
+  /** Short local vibration on every press and d-pad direction change. Default true. */
+  haptics?: boolean;
 }
 
 export interface Button {
@@ -13,7 +28,12 @@ export interface Button {
   label?: string;
   /** Hex color, /^#[0-9a-f]{3,8}$/i. */
   color?: string;
-  size?: 'large';
+  /** 'large': a bigger round button. 'wide': a long bar under the other buttons (good for a held action). */
+  size?: 'large' | 'wide';
+  /** Tap feedback length in ms (0-100, 0 = none). Default 10. */
+  haptic?: number;
+  /** A small pill in the pad's top bar (START, MENU...), away from the thumbs. Reports like any other button. */
+  system?: boolean;
 }
 
 /** Change what one pad shows. Every field is optional; omitted fields keep their value. */
