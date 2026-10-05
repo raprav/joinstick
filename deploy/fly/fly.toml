@@ -2,7 +2,7 @@
 # machine. From the repo root:
 #   fly deploy . --config deploy/fly/fly.toml --dockerfile deploy/fly/Dockerfile --ha=false
 app = "joinstick"
-primary_region = "mad"
+primary_region = "cdg"
 
 [env]
   PUBLIC_URL = "https://joinstick.fly.dev"
