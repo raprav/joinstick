@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paint Party</title>
+<link rel="icon" href="data:,">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; padding: 2vmin; display: grid; grid-template-columns: 1fr minmax(260px, 24vw); gap: 2vmin;
+         background: #101218; color: #e8eaf0; font: 700 16px system-ui, sans-serif; }
+  #arena { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+  aside { display: flex; flex-direction: column; gap: 2vmin; min-height: 0; }
+  h1 { margin: 0; font-size: clamp(28px, 3.4vw, 56px); font-weight: 900; line-height: 1; }
+  h1 small { display: block; margin-top: 6px; color: #8a90a2; font-size: 14px; font-weight: 600; }
+  .join { padding: 1.4vmin; border-radius: 16px; background: #fff; color: #101218; text-align: center; }
+  .join img { display: block; width: 100%; aspect-ratio: 1; }
+  .join img:not([src]) { display: none; }
+  .join b { display: block; font-size: clamp(18px, 2vw, 32px); }
+  .join code { font-size: 13px; color: #555; word-break: break-all; }
+  #clock { font-size: clamp(44px, 6vw, 104px); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+  #bars { display: flex; flex-direction: column; gap: 8px; }
+  .bar { position: relative; height: 34px; border-radius: 8px; background: #22262f; overflow: hidden; }
+  .bar i { position: absolute; inset: 0 auto 0 0; background: var(--c); }
+  .bar span { position: relative; padding: 0 10px; line-height: 34px; font-size: 18px; text-shadow: 0 1px 3px #000; }
+  @media (max-aspect-ratio: 1/1) { body { grid-template-columns: 1fr; grid-template-rows: auto auto; } }
+</style>
+</head>
+<body>
+<canvas id="arena" width="1920" height="1080"></canvas>
+<aside>
+  <h1>Paint Party <small id="status"></small></h1>
+  <div class="join"><img id="qr" alt="QR code to join"><b id="join-label"></b><code id="join-url"></code></div>
+  <div id="clock"></div>
+  <div id="bars"></div>
+</aside>
+
+<script type="module">
+import { host } from '/joinstick/host.js';
+
+const ROUND = 75, BREAK = 8;                // seconds
+const GW = 240, GH = 135, SCALE = 8;        // paint grid in cells; canvas px per cell
+const SPEED = 32, DASH_SPEED = 110;         // cells per second
+const DASH_TIME = 0.18, DASH_COOLDOWN = 1, BOMB_COOLDOWN = 4; // seconds
+const BODY = 6, BRUSH = 4, BOMB = 16;       // radius in cells
+const COLORS = [['Red', '#e5484d'], ['Blue', '#2f6fed'], ['Green', '#2fa84f'], ['Yellow', '#f5c400'],
+                ['Purple', '#8e4ec6'], ['Orange', '#ff8a00'], ['Pink', '#ff5fc8'], ['Cyan', '#00b8d9']];
+
+const room = await host({
+  slots: COLORS.length,
+  layout: {
+    stick: 'dpad',
+    arrangement: 'arc',
+    buttons: [
+      { id: 'dash', label: 'DASH', color: '#f5a524', size: 'large' },
+      { id: 'bomb', label: 'BOMB', color: '#e5484d', haptic: 0 }, // the game vibrates when the bomb really goes off
+    ],
+  },
+});
+const $ = (id) => document.getElementById(id);
+room.on('status', (s) => ($('status').textContent = s === 'connected' ? `Room ${room.code}` : s));
+$('status').textContent = `Room ${room.code}`;
+
+// The floor: one byte per cell, 0 = white, n = player n. Painting also writes the
+// pixel and keeps a per-player count, so coverage is free every frame.
+const grid = new Uint8Array(GW * GH);
+const counts = new Array(COLORS.length + 1).fill(0);
+const paint = Object.assign(document.createElement('canvas'), { width: GW, height: GH });
+const pixels = new ImageData(GW, GH);
+const RGB = COLORS.map(([, hex]) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)));
+
+function clearFloor() {
+  grid.fill(0);
+  counts.fill(0);
+  counts[0] = GW * GH;
+  pixels.data.fill(255);
+}
+
+function stamp(cx, cy, r, n) {
+  for (let y = Math.max(0, Math.ceil(cy - r)); y <= Math.min(GH - 1, cy + r); y++) {
+    for (let x = Math.max(0, Math.ceil(cx - r)); x <= Math.min(GW - 1, cx + r); x++) {
+      const i = y * GW + x;
+      if ((x - cx) ** 2 + (y - cy) ** 2 > r * r || grid[i] === n) continue;
+      counts[grid[i]]--;
+      counts[n]++;
+      grid[i] = n;
+      pixels.data.set(RGB[n - 1], i * 4);
+    }
+  }
+}
+
+const coverage = (n) => Math.round((counts[n] / (GW * GH)) * 100);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+// Players come and go at any moment: each frame, slots with a phone get a blob.
+const players = new Map(); // slot -> blob
+
+function spawn(n) {
+  players.set(n, {
+    x: BODY + Math.random() * (GW - 2 * BODY), y: BODY + Math.random() * (GH - 2 * BODY),
+    fx: 1, fy: 0, dash: 0, dashCd: 0, bombCd: 0, bumpCd: 0, boom: 0, off: '',
+  });
+  const [name, color] = COLORS[n - 1];
+  room.pad(n, { title: name, color, disabled: [] }); // the phone shows the player's colour
+}
+
+function bomb(n, p) {
+  stamp(p.x, p.y, BOMB, n);
+  for (let i = 0; i < 8; i++) {
+    const a = Math.random() * 2 * Math.PI, d = BOMB + 1 + Math.random() * 7;
+    stamp(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, 1.5 + Math.random() * 3, n);
+  }
+  p.boom = 0.35;
+  room.pad(n, { vibrate: 150 });
+}
+
+// Blobs push each other apart; both phones buzz.
+function bumps() {
+  const list = [...players];
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      const [[na, a], [nb, b]] = [list[i], list[j]];
+      const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 0.01;
+      if (d >= 2 * BODY) continue;
+      const push = (2 * BODY - d) / 2;
+      a.x -= (dx / d) * push; a.y -= (dy / d) * push;
+      b.x += (dx / d) * push; b.y += (dy / d) * push;
+      for (const [n, p] of [[na, a], [nb, b]]) {
+        if (p.bumpCd <= 0) room.pad(n, { vibrate: 40 });
+        p.bumpCd = 0.5;
+      }
+    }
+  }
+}
+
+let phase = 'play', timeLeft = ROUND, breakLeft = 0, results = [];
+
+function newRound() {
+  clearFloor();
+  for (const n of players.keys()) spawn(n);
+  phase = 'play';
+  timeLeft = ROUND;
+}
+
+function update(dt) {
+  for (let n = 1; n <= room.slots; n++) {
+    if (room.connected(n) && !players.has(n)) spawn(n);
+    if (!room.connected(n)) players.delete(n); // their paint stays on the floor
+  }
+  if (!players.size && phase === 'play' && timeLeft < ROUND) newRound(); // everyone left: start fresh
+
+  for (const [n, p] of players) {
+    const { x, y, pressed } = room.input(n); // poll once per frame; pressed = went down since last frame
+    for (const k of ['dash', 'dashCd', 'bombCd', 'bumpCd', 'boom']) p[k] -= dt;
+    if (phase !== 'play') continue;
+    const len = Math.hypot(x, y); // the d-pad gives 8 directions; diagonals are normalised
+    if (len) [p.fx, p.fy] = [x / len, y / len];
+    if (pressed.dash && p.dashCd <= 0) [p.dash, p.dashCd] = [DASH_TIME, DASH_COOLDOWN];
+    if (pressed.bomb && p.bombCd <= 0) { p.bombCd = BOMB_COOLDOWN; bomb(n, p); }
+    const v = p.dash > 0 ? DASH_SPEED : len ? SPEED : 0;
+    p.x = clamp(p.x + p.fx * v * dt, BODY, GW - BODY);
+    p.y = clamp(p.y + p.fy * v * dt, BODY, GH - BODY);
+    stamp(p.x, p.y, BRUSH, n);
+    // Grey out buttons while they recharge; only send when that changes.
+    const off = [p.dashCd > 0 && 'dash', p.bombCd > 0 && 'bomb'].filter(Boolean);
+    if (off.join() !== p.off) {
+      p.off = off.join();
+      room.pad(n, { disabled: off });
+    }
+  }
+  bumps();
+
+  if (phase === 'play' && players.size && (timeLeft -= dt) <= 0) {
+    phase = 'results';
+    breakLeft = BREAK;
+    results = [...players.keys()].sort((a, b) => counts[b] - counts[a]).map((n) => ({ n, pct: coverage(n) }));
+  } else if (phase === 'results' && (breakLeft -= dt) <= 0) newRound();
+}
+
+const ctx = $('arena').getContext('2d');
+const { width: CW, height: CH } = ctx.canvas;
+
+function banner(lines) {
+  ctx.fillStyle = '#101218d0';
+  ctx.fillRect(0, 0, CW, CH);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  lines.forEach(([text, size, color], i) => {
+    ctx.font = `900 ${size}px system-ui, sans-serif`;
+    ctx.fillStyle = color;
+    ctx.fillText(text, CW / 2, CH / 2 + (i - (lines.length - 1) / 2) * 150);
+  });
+}
+
+function render() {
+  paint.getContext('2d').putImageData(pixels, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(paint, 0, 0, CW, CH);
+
+  for (const [n, p] of players) {
+    const [x, y, r, color] = [p.x * SCALE, p.y * SCALE, BODY * SCALE, COLORS[n - 1][1]];
+    if (p.boom > 0) { // bomb shockwave
+      ctx.beginPath();
+      ctx.arc(x, y, BOMB * SCALE * (1 - p.boom / 0.35), 0, 2 * Math.PI);
+      ctx.lineWidth = 12;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = '#101218';
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = `900 ${r}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(n, x, y + 3); // same number as "P1" on the phone
+  }
+
+  if (phase === 'results') {
+    const [first] = results, [name, color] = COLORS[first.n - 1];
+    banner([[`${name} wins!`, 180, color], [`${first.pct}% of the floor`, 72, '#fff'],
+            [`Next round in ${Math.ceil(breakLeft)}`, 56, '#8a90a2']]);
+  } else if (!players.size) {
+    banner([['Scan the QR to play', 120, '#fff'], [`Paint the most floor in ${ROUND} seconds`, 56, '#8a90a2']]);
+  }
+}
+
+// Sidebar: the join QR always points at the first free slot, so one code on
+// screen is enough. Two phones scanning at the same instant: the second one is
+// offered the other free slots by the pad page.
+const bars = COLORS.map(([, color]) => {
+  const el = document.createElement('div');
+  el.className = 'bar';
+  el.style.setProperty('--c', color);
+  el.append(document.createElement('i'), document.createElement('span'));
+  $('bars').append(el);
+  return el;
+});
+let shownUrl;
+
+function sidebar() {
+  const free = Array.from({ length: room.slots }, (_, i) => i + 1).find((n) => !room.connected(n));
+  const url = free ? room.joinUrl(free) : '';
+  if (url !== shownUrl) {
+    shownUrl = url;
+    if (free) $('qr').src = room.qr(free);
+    else $('qr').removeAttribute('src');
+    $('join-label').textContent = free ? 'Scan to join' : `Game full: ${room.slots} players`;
+    $('join-url').textContent = url;
+  }
+  const t = Math.ceil(phase === 'play' ? timeLeft : 0);
+  $('clock').textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  const best = Math.max(1, ...[...players.keys()].map((n) => counts[n]));
+  bars.forEach((el, i) => {
+    el.hidden = !players.has(i + 1);
+    el.firstChild.style.width = `${(counts[i + 1] / best) * 100}%`; // the leader's bar is full
+    el.lastChild.textContent = `${COLORS[i][0]} ${coverage(i + 1)}%`;
+  });
+}
+
+clearFloor();
+let last = performance.now();
+requestAnimationFrame(function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  update(dt);
+  render();
+  sidebar();
+  requestAnimationFrame(frame);
+});
+</script>
+</body>
+</html>

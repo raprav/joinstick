@@ -42,6 +42,8 @@ Open `http://localhost:3000` on the computer, scan the QR with a phone on the
 same Wi-Fi, and press A. Embedding in your own Node server or using
 TypeScript: `npm i joinstick`. A complete example game is in
 [`examples/basic`](examples/basic).
+[`examples/paint-party`](examples/paint-party) is a party game for 1-8 phones
+that join and leave at any time through one QR code.
 
 ### Using a bundler or your own dev server
 
