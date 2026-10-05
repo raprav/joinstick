@@ -13,6 +13,10 @@ is 0.x, a minor release may change the API; the changelog says how.
   link that puts each phone in the first free slot (`/j/ROOM`);
   `/joinstick/qr.svg` accepts a missing `slot`.
 - `examples/paint-party`: a party game for 1-8 phones.
+- `--client-ip-header <name>` (`CLIENT_IP_HEADER`, `attach()` option
+  `clientIpHeader`): behind a reverse proxy, the per-address room cap and
+  failed-join limit use the header the proxy sets instead of the proxy's
+  address. Off by default, since clients can send the header themselves.
 
 ### Changed
 

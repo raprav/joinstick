@@ -218,7 +218,7 @@ new tab resumes the same room and the original tab gets an `error` event with
 ## 8. CLI and embedding
 
 ```
-joinstick [--port 3000] [--static ./dir] [--public-url URL]
+joinstick [--port 3000] [--static ./dir] [--public-url URL] [--client-ip-header NAME]
 ```
 
 | Flag | Env | Purpose |
@@ -226,6 +226,7 @@ joinstick [--port 3000] [--static ./dir] [--public-url URL]
 | `--port` | `PORT` | Port (default 3000). |
 | `--static <dir>` | | Serve your game from the same server (recommended). |
 | `--public-url <url>` | `PUBLIC_URL` | Base URL phones should open (tunnels, Docker, reverse proxies). Must be an origin like `https://abc.example.com`, without a path: Joinstick's routes live at the root. |
+| `--client-ip-header <name>` | `CLIENT_IP_HEADER` | Behind a reverse proxy: the header it sets to the visitor's address (`fly-client-ip`, `x-real-ip`; first value used). The 20-rooms and failed-join limits per address then use it. Never set it without a proxy that overwrites the header: clients can fake it. `attach()` option: `clientIpHeader`. |
 
 The join URL base is chosen as: `--public-url`, else the `Host` header the
 game used if it is not loopback, else the detected LAN IPv4 (192.168.x

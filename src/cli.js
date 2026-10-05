@@ -15,6 +15,10 @@ Options:
   --public-url <url>  Base URL phones should open, e.g. https://abc.trycloudflare.com
                       (default: $PUBLIC_URL, else the address the game page was
                       opened with, else the detected LAN address)
+  --client-ip-header <name>
+                      Header your reverse proxy sets to the visitor's address,
+                      e.g. fly-client-ip or x-real-ip (default: $CLIENT_IP_HEADER).
+                      Only behind a proxy that sets it: clients can fake it.
   -v, --version       Print the version
   -h, --help          Show this help
 `;
@@ -26,6 +30,7 @@ try {
       port: { type: 'string' },
       static: { type: 'string' },
       'public-url': { type: 'string' },
+      'client-ip-header': { type: 'string' },
       help: { type: 'boolean', short: 'h' },
       version: { type: 'boolean', short: 'v' },
     },
@@ -46,7 +51,8 @@ if (args.help) {
 const port = Number(args.port ?? process.env.PORT ?? 3000);
 const publicUrl = args['public-url'] ?? process.env.PUBLIC_URL;
 const server = http.createServer();
-attach(server, { static: args.static, publicUrl });
+const clientIpHeader = args['client-ip-header'] ?? process.env.CLIENT_IP_HEADER;
+attach(server, { static: args.static, publicUrl, clientIpHeader });
 
 server.on('error', (err) => {
   console.error(err.code === 'EADDRINUSE' ? `Port ${port} is already in use. Try --port ${port + 1}` : err.message);

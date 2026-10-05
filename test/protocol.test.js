@@ -5,6 +5,8 @@ import net from 'node:net';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { once } from 'node:events';
+import { WebSocket as WS } from 'ws';
 import { attach } from '../src/server.js';
 import { host } from '../public/host.js';
 import { join } from '../public/client.js';
@@ -546,6 +548,30 @@ test('one address cannot create more than 20 rooms', async () => {
   const last = await createRoom(srv.url);
   assert.deepEqual(last.created, { t: 'error', code: 'server-full' });
   await srv.stop();
+});
+
+// Node's WebSocket cannot set headers; the ws package can.
+async function createFrom(url, ip) {
+  const ws = new WS(url.replace(/^http/, 'ws') + '/joinstick/ws', { headers: { 'fly-client-ip': ip } });
+  await once(ws, 'open');
+  ws.send(JSON.stringify({ t: 'create', v: 1, slots: 2 }));
+  for (;;) {
+    const m = JSON.parse((await once(ws, 'message'))[0]);
+    if (m.t !== 'ping') return m.t === 'error' ? m.code : m.t;
+  }
+}
+
+test('the client IP header counts per visitor only when configured', async () => {
+  const proxied = await start({ clientIpHeader: 'Fly-Client-IP' });
+  for (let i = 0; i < 20; i++) assert.equal(await createFrom(proxied.url, '203.0.113.1'), 'created');
+  assert.equal(await createFrom(proxied.url, ' 203.0.113.1 , 10.0.0.1'), 'server-full'); // first value, trimmed
+  assert.equal(await createFrom(proxied.url, '203.0.113.2'), 'created');
+  await proxied.stop();
+
+  const direct = await start(); // not configured: a spoofed header changes nothing
+  for (let i = 0; i < 20; i++) assert.equal(await createFrom(direct.url, `203.0.113.${i}`), 'created');
+  assert.equal(await createFrom(direct.url, '198.51.100.7'), 'server-full');
+  await direct.stop();
 });
 
 test('layout options: orientation, arrangement, haptics, sizes and system buttons', async () => {

@@ -151,7 +151,7 @@ phones): [AGENTS.md](AGENTS.md).
 ## CLI
 
 ```
-joinstick [--port 3000] [--static ./dir] [--public-url URL] [--version]
+joinstick [--port 3000] [--static ./dir] [--public-url URL] [--client-ip-header NAME] [--version]
 ```
 
 | Flag | Env | |
@@ -159,6 +159,7 @@ joinstick [--port 3000] [--static ./dir] [--public-url URL] [--version]
 | `--port` | `PORT` | Port to listen on. Default 3000. |
 | `--static <dir>` | | Also serve your game from this directory. |
 | `--public-url <url>` | `PUBLIC_URL` | Origin that QR codes and join links use (no path). Default: the host the game page connected with, unless it is `localhost`/loopback; then the detected LAN address. |
+| `--client-ip-header <name>` | `CLIENT_IP_HEADER` | Header a reverse proxy sets to the visitor's address (`fly-client-ip`, `x-real-ip`). The per-address limits use it instead of the proxy's address. Only set it behind a proxy that overwrites the header. |
 | `-v`, `--version` | | Print the version. |
 
 ## Self-hosting
@@ -170,7 +171,9 @@ joinstick [--port 3000] [--static ./dir] [--public-url URL] [--version]
   `/joinstick/ws`, and start Joinstick with `--public-url https://your.domain`
   so QR codes point at the public address. Behind a proxy every game shares
   the proxy's IP address, so the 20-rooms-per-IP cap applies to all of them
-  together. With Caddy (which passes WebSockets through by default):
+  together unless you pass `--client-ip-header` with a header your proxy
+  overwrites with the visitor's address (Fly.io: `fly-client-ip`).
+  With Caddy (which passes WebSockets through by default):
 
   ```
   your.domain {

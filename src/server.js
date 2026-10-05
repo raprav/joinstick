@@ -157,13 +157,14 @@ function fatal(ws, code) {
  * Existing 'request' listeners keep working for every other path.
  *
  * @param {import('node:http').Server} server
- * @param {{ static?: string, publicUrl?: string, hostGraceMs?: number }} [opts]
+ * @param {{ static?: string, publicUrl?: string, hostGraceMs?: number, clientIpHeader?: string }} [opts]
  * @returns {{ close(): void }}
  */
 export function attach(server, opts = {}) {
   const publicUrl = opts.publicUrl?.replace(/\/+$/, '');
   const staticDir = opts.static && path.resolve(opts.static);
   const hostGrace = opts.hostGraceMs ?? 60_000;
+  const ipHeader = opts.clientIpHeader?.toLowerCase();
   const rooms = new Map();
   const failedJoins = new Map(); // ip -> { count, since }
   // Right after a (re)start, phones of recreated rooms retry their joins
@@ -171,6 +172,10 @@ export function attach(server, opts = {}) {
   const countFailuresFrom = Date.now() + hostGrace;
   let closed = false;
   const wss = new WebSocketServer({ noServer: true, maxPayload: 8 * 1024 });
+
+  // The visitor's address for the per-IP limits. Behind a proxy, the header it sets;
+  // only when configured, because anyone can send that header straight to us.
+  const clientIp = (req) => (ipHeader && String(req.headers[ipHeader] ?? '').split(',')[0].trim()) || req.socket.remoteAddress;
 
   function joinBase(req) {
     if (publicUrl) return publicUrl;
@@ -216,7 +221,7 @@ export function attach(server, opts = {}) {
     const wanted = typeof m.room === 'string' ? m.room.toUpperCase() : '';
     let room = rooms.get(wanted);
 
-    const ip = req.socket.remoteAddress;
+    const ip = ws.ip;
     let resumed = false;
     if (room && room.hostToken === m.hostToken && room.slots.length === n) {
       // Resume: same room, same pads. Pads get a fresh 'joined' when the
@@ -234,7 +239,7 @@ export function attach(server, opts = {}) {
       }
     } else {
       if (rooms.size >= MAX_ROOMS) return fatal(ws, 'server-full');
-      // ponytail: per-IP cap only; behind a tunnel every host shares one IP.
+      // ponytail: per-IP cap only; behind a tunnel without clientIpHeader every host shares one IP.
       if ([...rooms.values()].filter((r) => r.ip === ip).length >= MAX_ROOMS_PER_IP) return fatal(ws, 'server-full');
       // Recreate (e.g. after a server restart) keeps the code so pads can rejoin.
       const recreate = !room && CODE.test(wanted) && HOST_TOKEN.test(m.hostToken ?? '');
@@ -262,8 +267,8 @@ export function attach(server, opts = {}) {
     const now = Date.now();
     let recent = failedJoins.get(ws.ip);
     if (!recent || now - recent.since >= FAILED_WINDOW) recent = { count: 0, since: now };
-    // ponytail: keyed by socket address, so behind a proxy or tunnel one guesser
-    // locks every remote phone out for a minute; key on a trusted header if that matters.
+    // Keyed by client address: behind a proxy without clientIpHeader, one guesser
+    // locks every remote phone out for a minute.
     if (recent.count >= MAX_FAILED_JOINS_PER_IP) return fatal(ws, 'rate-limited');
     const fail = (code, extra) => {
       send(ws, { t: 'error', code, ...extra });
@@ -350,7 +355,7 @@ export function attach(server, opts = {}) {
   wss.on('connection', (ws, req) => {
     ws.seen = Date.now();
     ws.failedJoins = 0;
-    ws.ip = req.socket.remoteAddress;
+    ws.ip = clientIp(req);
     ws.on('message', (raw, isBinary) => {
       ws.seen = Date.now();
       let m;

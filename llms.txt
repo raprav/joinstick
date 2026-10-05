@@ -6,7 +6,7 @@ Full guide: AGENTS.md. Wire format: PROTOCOL.md. Types: /joinstick/host.d.ts, /j
 
 ## Run
 
-`npx joinstick --static ./my-game` serves the game and Joinstick on http://localhost:3000 (or `npm i joinstick`, then `npx joinstick`). Node 22+. Phones must be on the same Wi-Fi. Flags: `--port` (PORT, default 3000), `--static <dir>`, `--public-url <url>` (PUBLIC_URL; base URL phones open, an origin without a path, for tunnels/Docker/proxies).
+`npx joinstick --static ./my-game` serves the game and Joinstick on http://localhost:3000 (or `npm i joinstick`, then `npx joinstick`). Node 22+. Phones must be on the same Wi-Fi. Flags: `--port` (PORT, default 3000), `--static <dir>`, `--public-url <url>` (PUBLIC_URL; base URL phones open, an origin without a path, for tunnels/Docker/proxies), `--client-ip-header <name>` (CLIENT_IP_HEADER; behind a trusted proxy, the header with the visitor's address for the per-address limits).
 
 ## Integrate
 

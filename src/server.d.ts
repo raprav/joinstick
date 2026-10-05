@@ -7,6 +7,12 @@ export interface AttachOptions {
   publicUrl?: string;
   /** How long a room waits for its game page to come back before closing, in ms. Default 60000. */
   hostGraceMs?: number;
+  /**
+   * Header a trusted reverse proxy sets to the visitor's address, e.g. 'fly-client-ip' or
+   * 'x-real-ip'. The per-address limits use it (first value) instead of the socket address.
+   * Only set it behind a proxy that overwrites the header: clients can send it themselves.
+   */
+  clientIpHeader?: string;
 }
 
 /**
