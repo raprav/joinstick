@@ -1,0 +1,27 @@
+# The public Paint Party demo. Rooms live in memory, so this must run as ONE
+# machine. From the repo root:
+#   fly deploy . --config deploy/fly/fly.toml --dockerfile deploy/fly/Dockerfile --ha=false
+app = "joinstick"
+primary_region = "mad"
+
+[env]
+  PUBLIC_URL = "https://joinstick.fly.dev"
+  CLIENT_IP_HEADER = "fly-client-ip"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/llms.txt"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
