@@ -5,15 +5,17 @@ player scans it, and their phone becomes a controller. No accounts, no app
 install: one small self-hosted Node server and a few lines in your game. Made
 for local multiplayer and party games on a laptop or TV.
 
-**[Try it live: Paint Party](https://joinstick.fly.dev/demo/paint-party)**:
-open it on a big screen and scan the QR code with phones (1-8 players).
-
 [![npm](https://img.shields.io/npm/v/joinstick)](https://www.npmjs.com/package/joinstick)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![node >= 22](https://img.shields.io/badge/node-%3E%3D22-339933)](package.json)
 [![CI](https://github.com/raprav/joinstick/actions/workflows/ci.yml/badge.svg)](https://github.com/raprav/joinstick/actions/workflows/ci.yml)
 
-<p align="center"><img src="https://raw.githubusercontent.com/raprav/joinstick/main/docs/hero.png" alt="Left: the example game on a laptop, showing a room code, two moving squares and a QR code per player. Right: a phone held sideways showing the Joinstick pad with a d-pad and two buttons." width="800"></p>
+<p align="center"><a href="https://joinstick.fly.dev/demo/paint-party"><img src="https://raw.githubusercontent.com/raprav/joinstick/main/docs/hero.png" alt="Left: Paint Party on a TV mid-round, four paint blobs covering the floor and one QR code in the corner that every player scans. Right: a phone held sideways showing player 1's orange pad with a d-pad and BOMB and DASH buttons." width="800"></a></p>
+
+**[Live demo: Paint Party](https://joinstick.fly.dev/demo/paint-party)**. Open it on a big screen and scan the QR
+with phones: one QR for everyone, drop in or out anytime, 1-8 players, haptics
+on Android. Its source is a single file in
+[`examples/paint-party`](examples/paint-party) that uses only the public SDK.
 
 ## Quick start
 
@@ -80,8 +82,9 @@ needs HTTPS too (see Self-hosting).
                                 └──────────────────┘
 ```
 
-The game creates a room (`KQZX`) with up to 8 player slots. Each slot has a QR
-code that opens `/j/KQZX/<slot>` on a phone. The phone sends its controller
+The game creates a room (`KQZX`) with up to 8 player slots. One QR code opens
+`/j/KQZX` on any phone, which takes the first free slot (`/j/KQZX/<slot>` asks
+for a specific one). The phone sends its controller
 state on every change; your game reads `room.input(n)` once per frame. All
 traffic goes through your server; nothing leaves your network unless you put
 it on the internet.

@@ -1,6 +1,6 @@
 # Joinstick
 
-> Turn phones into gamepads for browser games. The game page (host) shows one QR code per player slot; scanning it opens a controller page on the phone. Self-hosted Node server (`npx joinstick`), plain ESM browser SDKs, JSON over WebSocket.
+> Turn phones into gamepads for browser games. The game page (host) shows one QR code for everyone (or one per slot); scanning it opens a controller page on the phone in the first free slot. Self-hosted Node server (`npx joinstick`), plain ESM browser SDKs, JSON over WebSocket.
 
 Full guide: AGENTS.md. Wire format: PROTOCOL.md. Types: /joinstick/host.d.ts, /joinstick/client.d.ts (all in the npm package and at https://github.com/raprav/joinstick).
 

@@ -1,9 +1,9 @@
 # Joinstick for coding agents
 
 Joinstick turns phones into gamepads for browser games. The game page (the
-**host**) shows one QR code per player slot; a player scans it and the phone
-becomes a controller. Read this file before integrating; it is the whole
-contract. Wire format: [PROTOCOL.md](PROTOCOL.md). Types:
+**host**) shows a QR code; each player scans it and their phone becomes a
+controller in the first free slot (per-slot QR codes exist too). Read this
+file before integrating; it is the whole contract. Wire format: [PROTOCOL.md](PROTOCOL.md). Types:
 [`public/host.d.ts`](public/host.d.ts), [`public/client.d.ts`](public/client.d.ts).
 
 ## 1. Run the server
