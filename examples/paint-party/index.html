@@ -6,29 +6,49 @@
 <title>Paint Party</title>
 <link rel="icon" href="data:,">
 <style>
-  :root { --qr: 30vh; } /* QR size: scans from about 3 m on a TV, 1-1.5 m on a laptop screen */
-  body { margin: 0; overflow: hidden; background: #101218; color: #101218; font: 800 2.4vh system-ui, sans-serif; }
-  #arena { position: fixed; inset: 0 0 3.2vh; width: 100%; height: calc(100% - 3.2vh); }
-  .join { position: fixed; right: 2vh; bottom: 5vh; padding: 1.4vh; border-radius: 1.8vh; background: #fff;
-          box-shadow: 0 0.6vh 3vh #0006; text-align: center; }
-  .join img { display: block; width: var(--qr); height: var(--qr); }
-  .join b { display: block; font-size: 3vh; }
-  .join small { display: block; color: #6b7080; font-size: 1.5vh; font-weight: 600; }
-  #count { font-size: 4vh; font-variant-numeric: tabular-nums; }
+  :root { --qr: 30vh; --font: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", system-ui, sans-serif; }
+  body.playing { --qr: 19vh; } /* big while the room arrives, small once the paint flies */
+  body { margin: 0; overflow: hidden; background: #1b1a17; color: #2b2d42; font: 800 2.2vh var(--font); }
+  #stage { position: fixed; inset: 0 0 4vh; overflow: hidden; /* warm floor, faint tiles, soft vignette */
+           background: radial-gradient(closest-corner, #5a402000 60%, #5a402024),
+                       linear-gradient(#8a6a3a14 2px, #0000 0) 0 0 / 4.2vw 4.2vw,
+                       linear-gradient(90deg, #8a6a3a14 2px, #0000 0) 0 0 / 4.2vw 4.2vw, #f4efe6; }
+  #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #paint { filter: url(#goo); } /* blur + alpha threshold: blocky cells become liquid edges */
+  .join { position: fixed; right: 1.6vh; bottom: 5.6vh; padding: 1.2vh; border-radius: 2vh; background: #fffdf8;
+          box-shadow: 0 0.8vh 3vh #0005; text-align: center; transition: opacity 0.3s; }
+  .join img { display: block; width: var(--qr); height: var(--qr);
+              transition: width 0.8s cubic-bezier(0.3, 1.3, 0.5, 1), height 0.8s cubic-bezier(0.3, 1.3, 0.5, 1); }
+  .join b { display: block; margin-top: 0.4vh; font-size: 2.4vh; }
+  .join small { display: block; color: #8a8478; font-size: 1.3vh; font-weight: 600; }
+  #count { font-size: 3vh; font-variant-numeric: tabular-nums; }
   .join.full img, .join.full b, .join.full small { display: none; }
+  #clock { position: fixed; top: 1.4vh; left: 50%; transform: translateX(-50%); padding: 0.2vh 2vh; border-radius: 99px;
+           background: #1b1a17b0; color: #fffdf8; font-size: 4.2vh; font-variant-numeric: tabular-nums; transition: opacity 0.3s; }
+  #clock.hurry { color: #ffb199; }
   .peek { opacity: 0.3; } /* a blob is underneath */
-  #clock { position: fixed; top: 1.5vh; left: 50%; transform: translateX(-50%); padding: 0 2.4vh; border-radius: 99px;
-           background: #101218b0; color: #fff; font-size: 6vh; font-variant-numeric: tabular-nums; }
-  #shares { position: fixed; left: 0; right: 0; bottom: 0; height: 3.2vh; display: flex; }
-  #shares i { overflow: hidden; padding-left: 0.8vh; background: var(--c); color: #fff; font-style: normal;
-              line-height: 3.2vh; white-space: nowrap; text-shadow: 0 1px 2px #0008; }
-  #hint { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; font-size: 8vh;
+  #shares { position: fixed; left: 2vh; right: 2vh; bottom: 1.1vh; height: 1.8vh; display: flex; gap: 0.4vh;
+            border-radius: 99px; background: #ffffff14; }
+  #shares i { min-width: 0; overflow: hidden; border-radius: 99px; background: var(--c); color: var(--ink);
+              font: 800 1.3vh/1.8vh var(--font); text-align: center; transition: width 0.3s; }
+  #hint { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; font-size: 7vh;
           pointer-events: none; animation: breathe 2s ease-in-out infinite alternate; }
-  @keyframes breathe { from { opacity: 0.25; } to { opacity: 0.6; } }
+  @keyframes breathe { from { opacity: 0.2; } to { opacity: 0.5; } }
+  @media (prefers-reduced-motion: reduce) {
+    #hint { animation: none; opacity: 0.4; }
+    .join img, #shares i { transition: none; }
+  }
 </style>
 </head>
 <body>
-<canvas id="arena"></canvas>
+<div id="stage"><canvas id="paint"></canvas><canvas id="arena"></canvas></div>
+<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+  <filter id="goo" color-interpolation-filters="sRGB">
+    <feGaussianBlur stdDeviation="3"/>
+    <feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -9"/> <!-- round outline -->
+    <feComposite in="SourceGraphic" operator="atop"/> <!-- sharp colours inside it -->
+  </filter>
+</svg>
 <div id="clock"></div>
 <p id="hint">Scan to play</p>
 <div id="shares"></div>
@@ -42,24 +62,27 @@
 <script type="module">
 import { host } from '/joinstick/host.js';
 
-const ROUND = 75, BREAK = 8;                // seconds
-const GW = 240, SCALE = 8;                  // paint grid width in cells; canvas px per cell
-const SPEED = 32, DASH_SPEED = 110;         // cells per second
-const DASH_TIME = 0.18, DASH_COOLDOWN = 1, BOMB_COOLDOWN = 4; // seconds
-const BODY = 6, BRUSH = 4, BOMB = 16;       // radius in cells
-const COLORS = [['Red', '#e5484d'], ['Blue', '#2f6fed'], ['Green', '#2fa84f'], ['Yellow', '#f5c400'],
-                ['Purple', '#8e4ec6'], ['Orange', '#ff8a00'], ['Pink', '#ff5fc8'], ['Cyan', '#00b8d9']];
+const ROUND = 75, BREAK = 8;                   // seconds
+const W = 1920, CELL = 4;                      // canvas width; paint grid cell (both px)
+const SPEED = 260, DASH_SPEED = 880;           // px per second
+const DASH_TIME = 0.18, DASH_COOLDOWN = 1, BOMB_COOLDOWN = 4, POP = 0.5; // seconds
+const BODY = 46, BRUSH = 30, BOMB = 130;       // radius in px
+const FONT = 'ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", system-ui, sans-serif';
+// Every pair stays apart (CIELAB distance >= 17) under simulated protanopia,
+// deuteranopia and tritanopia; the first four are the most distinct.
+const COLORS = [['Red', '#d55e00'], ['Blue', '#1f5fd6'], ['Yellow', '#f2b705'], ['Green', '#0e9f6e'],
+                ['Pink', '#e85aa8'], ['Sky', '#38b6f0'], ['Black', '#2b2d42'], ['Brown', '#8a5a2b']];
+const RGB = COLORS.map(([, hex]) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)));
+const shade = (n, k) => `rgb(${RGB[n - 1].map((c) => Math.round(c * k))})`; // k < 1: darker
+const ink = (n) => (RGB[n - 1][0] * 0.3 + RGB[n - 1][1] * 0.59 + RGB[n - 1][2] * 0.11 > 160 ? '#2b2d42' : '#fff');
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches; // no shake, no confetti
 
 const room = await host({
   slots: COLORS.length,
-  layout: {
-    stick: 'dpad',
-    arrangement: 'arc',
-    buttons: [
-      { id: 'dash', label: 'DASH', color: '#f5a524', size: 'large' },
-      { id: 'bomb', label: 'BOMB', color: '#e5484d', haptic: 0 }, // the game vibrates when the bomb really goes off
-    ],
-  },
+  layout: { stick: 'dpad', arrangement: 'arc', buttons: [
+    { id: 'dash', label: 'DASH', color: '#f5a524', size: 'large' },
+    { id: 'bomb', label: 'BOMB', color: '#e5484d', haptic: 0 }, // the game vibrates when the bomb really goes off
+  ] },
 });
 const $ = (id) => document.getElementById(id);
 // One QR for everyone: each phone that scans it gets the first free slot.
@@ -70,28 +93,29 @@ function showRoom(status = 'connected') {
 room.on('status', showRoom); // after a reconnect the code or join address may differ
 showRoom();
 
-// The floor: one byte per cell, 0 = white, n = player n. Painting also writes the
+// The floor: one byte per cell, 0 = clean, n = player n. Painting also writes the
 // pixel and keeps a per-player count, so coverage is free every frame.
-const ctx = $('arena').getContext('2d');
-const paint = document.createElement('canvas');
+const ctx = $('arena').getContext('2d'); // blobs and effects, over the paint
+const paint = $('paint'); // one pixel per cell; CSS scales it up smoothly
 const counts = new Array(COLORS.length + 1).fill(0);
-const RGB = COLORS.map(([, hex]) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)));
-let GH, grid, pixels;
+const RGBA = RGB.map((c) => [...c, 255]);
+let H, GW, GH, grid, pixels;
 
 // A fresh floor shaped like the window, so the canvas fills the screen.
 function newFloor() {
   const { clientWidth: w, clientHeight: h } = ctx.canvas;
-  GH = Math.round(Math.min(2 * GW, Math.max(GW / 3, (GW * h) / w)));
+  H = Math.round(Math.min(2 * W, Math.max(W / 3, (W * h) / w)) / CELL) * CELL;
+  [GW, GH] = [W / CELL, H / CELL];
   grid = new Uint8Array(GW * GH);
-  pixels = new ImageData(GW, GH);
-  pixels.data.fill(255);
+  pixels = new ImageData(GW, GH); // transparent where clean
   counts.fill(0);
   counts[0] = grid.length;
   [paint.width, paint.height] = [GW, GH];
-  [ctx.canvas.width, ctx.canvas.height] = [GW * SCALE, GH * SCALE];
+  [ctx.canvas.width, ctx.canvas.height] = [W, H];
 }
 
-function stamp(cx, cy, r, n) {
+function stamp(px, py, pr, n) {
+  const [cx, cy, r] = [px / CELL, py / CELL, pr / CELL];
   for (let y = Math.max(0, Math.ceil(cy - r)); y <= Math.min(GH - 1, cy + r); y++) {
     for (let x = Math.max(0, Math.ceil(cx - r)); x <= Math.min(GW - 1, cx + r); x++) {
       const i = y * GW + x;
@@ -99,37 +123,59 @@ function stamp(cx, cy, r, n) {
       counts[grid[i]]--;
       counts[n]++;
       grid[i] = n;
-      pixels.data.set(RGB[n - 1], i * 4);
+      pixels.data.set(RGBA[n - 1], i * 4);
     }
+  }
+}
+
+function splat(x, y, r, n) {
+  stamp(x, y, r, n);
+  for (let i = 0; i < 8; i++) {
+    const a = Math.random() * 2 * Math.PI, d = r + CELL + Math.random() * r * 0.45;
+    stamp(x + Math.cos(a) * d, y + Math.sin(a) * d, (r / 16) * (1.5 + Math.random() * 3), n);
   }
 }
 
 const coverage = (n) => Math.round((counts[n] / grid.length) * 100);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
+// Juice: droplets, dash ghosts and confetti. Purely visual.
+let bits = []; // { kind, x, y, vx, vy, g, r, life, max, n, spin }
+let shake = 0;
+
+function burst(x, y, n) {
+  for (let i = 0; i < 14; i++) {
+    const a = Math.random() * 2 * Math.PI, v = 700 + Math.random() * 900; // flies past the splat's edge
+    bits.push({ kind: 'drop', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 0, r: 8 + Math.random() * 14, life: 0.45, max: 0.45, n });
+  }
+}
+
+function confetti(n) {
+  if (calm) return;
+  for (let i = 0; i < 90; i++) {
+    bits.push({ kind: 'confetti', x: Math.random() * W, y: -20 - Math.random() * H * 0.6, vx: (Math.random() - 0.5) * 120,
+                vy: 150 + Math.random() * 200, g: 120, r: 7 + Math.random() * 7, life: BREAK, max: BREAK,
+                n: Math.random() < 0.7 ? n : 0, spin: Math.random() * 6 });
+  }
+}
+
 // Players come and go at any moment: each frame, slots with a phone get a blob.
 const players = new Map(); // slot -> blob
 
 function spawn(n) {
   players.set(n, {
-    x: BODY + Math.random() * (GW - 2 * BODY), y: BODY + Math.random() * (GH - 2 * BODY),
-    fx: 1, fy: 0, dash: 0, dashCd: 0, bombCd: 0, bumpCd: 0, boom: 0, off: '',
+    x: BODY + Math.random() * (W - 2 * BODY), y: BODY + Math.random() * (H - 2 * BODY), fx: 1, fy: 0, moving: false,
+    dash: 0, dashCd: 0, bombCd: 0, bumpCd: 0, boom: 0, pop: POP, off: '',
   });
   const [name, color] = COLORS[n - 1];
   room.pad(n, { title: name, color, disabled: [] }); // the phone shows the player's colour
 }
 
-function splat(x, y, r, n) {
-  stamp(x, y, r, n);
-  for (let i = 0; i < 8; i++) {
-    const a = Math.random() * 2 * Math.PI, d = r + 1 + Math.random() * r * 0.45;
-    stamp(x + Math.cos(a) * d, y + Math.sin(a) * d, (r / 16) * (1.5 + Math.random() * 3), n);
-  }
-}
-
 function bomb(n, p) {
   splat(p.x, p.y, BOMB, n);
+  burst(p.x, p.y, n);
   p.boom = 0.35;
+  if (!calm) shake = 0.25;
   room.pad(n, { vibrate: 150 });
 }
 
@@ -171,20 +217,22 @@ function update(dt) {
 
   if (!players.size && (idleSplat -= dt) <= 0) { // nobody here: soft splats while the QR waits
     idleSplat = 0.8;
-    splat(Math.random() * GW, Math.random() * GH, 4 + Math.random() * 8, 1 + Math.floor(Math.random() * COLORS.length));
+    splat(Math.random() * W, Math.random() * H, 30 + Math.random() * 60, 1 + Math.floor(Math.random() * COLORS.length));
   }
 
   for (const [n, p] of players) {
     const { x, y, pressed } = room.input(n); // poll once per frame; pressed = went down since last frame
-    for (const k of ['dash', 'dashCd', 'bombCd', 'bumpCd', 'boom']) p[k] -= dt;
+    for (const k of ['dash', 'dashCd', 'bombCd', 'bumpCd', 'boom', 'pop']) p[k] -= dt;
     if (phase !== 'play') continue;
     const len = Math.hypot(x, y); // the d-pad gives 8 directions; diagonals are normalised
+    p.moving = len > 0;
     if (len) [p.fx, p.fy] = [x / len, y / len];
     if (pressed.dash && p.dashCd <= 0) [p.dash, p.dashCd] = [DASH_TIME, DASH_COOLDOWN];
     if (pressed.bomb && p.bombCd <= 0) { p.bombCd = BOMB_COOLDOWN; bomb(n, p); }
+    if (p.dash > 0) bits.push({ kind: 'ghost', x: p.x, y: p.y, vx: 0, vy: 0, g: 0, r: BODY, life: 0.25, max: 0.25, n });
     const v = p.dash > 0 ? DASH_SPEED : len ? SPEED : 0;
-    p.x = clamp(p.x + p.fx * v * dt, BODY, GW - BODY);
-    p.y = clamp(p.y + p.fy * v * dt, BODY, GH - BODY);
+    p.x = clamp(p.x + p.fx * v * dt, BODY, W - BODY);
+    p.y = clamp(p.y + p.fy * v * dt, BODY, H - BODY);
     stamp(p.x, p.y, BRUSH, n);
     // Grey out buttons while they recharge; only send when that changes.
     const off = [p.dashCd > 0 && 'dash', p.bombCd > 0 && 'bomb'].filter(Boolean);
@@ -195,84 +243,152 @@ function update(dt) {
   }
   bumps();
 
+  const drag = Math.exp(-6 * dt);
+  for (const b of bits) {
+    [b.x, b.y, b.vy, b.life] = [b.x + b.vx * dt, b.y + b.vy * dt, b.vy + b.g * dt, b.life - dt];
+    if (b.kind === 'drop') [b.vx, b.vy] = [b.vx * drag, b.vy * drag];
+  }
+  bits = bits.filter((b) => b.life > 0);
+  shake -= dt;
+
   if (phase === 'play' && players.size && (timeLeft -= dt) <= 0) {
     phase = 'results';
     breakLeft = BREAK;
     results = [...players.keys()].sort((a, b) => counts[b] - counts[a]).map((n) => ({ n, pct: coverage(n) }));
+    confetti(results[0].n);
   } else if (phase === 'results' && (breakLeft -= dt) <= 0) newRound();
 }
 
-function banner(lines) {
-  const { width: w, height: h } = ctx.canvas;
-  ctx.fillStyle = '#101218c0';
-  ctx.fillRect(0, 0, w, h);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  lines.forEach(([text, size, color], i) => {
-    ctx.font = `900 ${size}px system-ui, sans-serif`;
-    ctx.fillStyle = color;
-    ctx.fillText(text, w / 2, h / 2 + (i - (lines.length - 1) / 2) * 150);
-  });
+// Canvas helpers: a filled oval, a (fading) ring, centred text.
+function oval(x, y, rx, ry, color, rot = 0) {
+  ctx.beginPath();
+  ctx.ellipse(x, y, Math.max(0, rx), Math.max(0, ry), rot, 0, 2 * Math.PI);
+  ctx.fillStyle = color;
+  ctx.fill();
 }
 
-function render() {
-  paint.getContext('2d').putImageData(pixels, 0, 0);
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(paint, 0, 0, ctx.canvas.width, ctx.canvas.height);
+function ring(x, y, r, color, alpha, width = 10) {
+  ctx.globalAlpha = Math.max(0, alpha);
+  ctx.beginPath();
+  ctx.arc(x, y, Math.max(0, r), 0, 2 * Math.PI);
+  [ctx.lineWidth, ctx.strokeStyle] = [width, color];
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
 
-  for (const [n, p] of players) {
-    const [x, y, r, color] = [p.x * SCALE, p.y * SCALE, BODY * SCALE, COLORS[n - 1][1]];
-    if (p.boom > 0) { // bomb shockwave
-      ctx.beginPath();
-      ctx.arc(x, y, BOMB * SCALE * (1 - p.boom / 0.35), 0, 2 * Math.PI);
-      ctx.lineWidth = 12;
-      ctx.strokeStyle = color;
-      ctx.stroke();
+function text(s, x, y, size, color) {
+  Object.assign(ctx, { font: `800 ${size}px ${FONT}`, textAlign: 'center', textBaseline: 'middle', fillStyle: color });
+  ctx.fillText(s, x, y);
+}
+
+function drawBits(kinds) {
+  for (const b of bits.filter((b) => kinds.includes(b.kind))) {
+    const k = b.life / b.max, color = b.n ? COLORS[b.n - 1][1] : '#fffdf8';
+    if (b.kind === 'confetti') {
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(b.spin + b.y * 0.02);
+      ctx.fillStyle = color;
+      ctx.fillRect(-b.r, -b.r / 2, b.r * 2, b.r);
+      ctx.restore();
+    } else if (b.kind === 'ghost') {
+      ctx.globalAlpha = 0.3 * k;
+      oval(b.x, b.y, b.r * (0.6 + 0.4 * k), b.r * (0.6 + 0.4 * k), color);
+      ctx.globalAlpha = 1;
+    } else {
+      oval(b.x, b.y, b.r * k, b.r * k, color);
+      ring(b.x, b.y, b.r * k, shade(b.n, 0.6), 1, 3); // outlined: readable over its own paint
     }
+  }
+}
+
+const easeOutBack = (t) => 1 + 2.7 * (t - 1) ** 3 + 1.7 * (t - 1) ** 2; // overshoots a little, then settles
+
+function drawBlob(n, p, t) {
+  const color = COLORS[n - 1][1], dark = shade(n, 0.6);
+  const popped = p.pop > 0 ? 1 - p.pop / POP : 1;
+  const r = BODY * Math.max(0, easeOutBack(popped)); // ease(0) can round to -1e-14
+  if (p.pop > 0) ring(p.x, p.y, BODY * (1 + 1.5 * popped), color, 1 - popped); // drop-in ring
+  if (p.boom > 0) ring(p.x, p.y, BOMB * (1.2 - p.boom / 0.35), '#fffdf8', p.boom / 0.35, 16); // bomb shockwave
+  oval(p.x + 6, p.y + r * 0.8, r * 1.05, r * 0.38, '#3c281424'); // soft shadow
+  // Body: stretched along the way it goes, wobbling a little; eyes look ahead.
+  const s = p.dash > 0 ? 0.3 : p.moving ? 0.1 + 0.05 * Math.sin(t * 20) : 0.04 * Math.sin(t * 4);
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(Math.atan2(p.fy, p.fx));
+  ctx.scale(1 + s, 1 - s);
+  oval(0, 0, r, r, color);
+  ring(0, 0, r, dark, 1, r * 0.14);
+  for (const side of [-1, 1]) {
+    oval(r * 0.3, side * r * 0.32, r * 0.22, r * 0.26, '#fff');
+    oval(r * 0.38, side * r * 0.32, r * 0.12, r * 0.12, '#1b1a17');
+  }
+  ctx.restore();
+  oval(p.x - r * 0.4, p.y - r * 0.5, r * 0.26, r * 0.14, '#ffffff55', -0.6); // gloss
+  const [bx, by] = [p.x + r * 0.75, p.y - r * 0.8]; // number badge, same as "P1" on the phone
+  oval(bx, by, r * 0.42, r * 0.42, '#fffdf8');
+  ring(bx, by, r * 0.42, dark, 1, 5);
+  text(n, bx, by + 2, r * 0.55, dark);
+}
+
+function drawResults() {
+  const [{ n, pct }] = results, cx = W / 2, cy = H / 2;
+  ctx.globalAlpha = 0.88 * Math.min(1, (BREAK - breakLeft) / 0.8); // the winner's colour floods in
+  ctx.fillStyle = COLORS[n - 1][1];
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = 1;
+  drawBits(['confetti']);
+  text(`${COLORS[n - 1][0]} wins!`, cx, cy - 170, 170, ink(n));
+  text(`${pct}% of the floor`, cx, cy - 40, 60, ink(n));
+  results.forEach((r, i) => { // ranking: a pill per colour, four per row
+    const inRow = Math.min(4, results.length - i + (i % 4));
+    const x = cx + ((i % 4) - (inRow - 1) / 2) * 330, y = cy + 60 + Math.floor(i / 4) * 76;
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, 2 * Math.PI);
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = '#101218';
+    ctx.moveTo(x - 130, y);
+    ctx.lineTo(x + 130, y);
+    Object.assign(ctx, { lineCap: 'round', lineWidth: 58, strokeStyle: '#fffdf8' }); // a thick round line is a pill
     ctx.stroke();
-    ctx.fillStyle = '#fff';
-    ctx.font = `900 ${r}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(n, x, y + 3); // same number as "P1" on the phone
-  }
-
-  if (phase === 'results') {
-    const [first] = results, [name, color] = COLORS[first.n - 1];
-    banner([[`${name} wins!`, 180, color], [`${first.pct}% of the floor`, 72, '#fff'],
-            [`Next round in ${Math.ceil(breakLeft)}`, 56, '#c0c4d0']]);
-  }
-}
-
-// Overlays: join card, clock, and one stacked bar of floor shares below the floor.
-// The card and clock fade while a blob is underneath, so nobody gets lost.
-function covers(el) {
-  const r = el.getBoundingClientRect(), c = ctx.canvas.getBoundingClientRect();
-  return [...players.values()].some((p) => {
-    const x = c.left + (p.x / GW) * c.width, y = c.top + (p.y / GH) * c.height, pad = (BODY / GW) * c.width;
-    return x > r.left - pad && x < r.right + pad && y > r.top - pad && y < r.bottom + pad;
+    oval(x - 128, y, 13, 13, COLORS[r.n - 1][1]);
+    text(`${i + 1}. ${COLORS[r.n - 1][0]} ${r.pct}%`, x + 12, y + 1, 34, '#2b2d42');
   });
+  text(`Next round in ${Math.ceil(breakLeft)}`, cx, cy + 250, 40, ink(n));
 }
 
-const shares = COLORS.map(([, color]) => {
+function render(t) {
+  const jolt = () => `${(Math.random() - 0.5) * 3 * Math.max(0, shake)}vh`;
+  $('stage').style.translate = shake > 0 ? `${jolt()} ${jolt()}` : '';
+  paint.getContext('2d').putImageData(pixels, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  drawBits(['ghost', 'drop']);
+  for (const [n, p] of players) drawBlob(n, p, t);
+  if (phase === 'results') drawResults();
+}
+
+// Overlays: join card, clock, and a slim pill of floor shares below the floor.
+// The card and clock fade while a blob is underneath, so nobody gets lost.
+const shares = COLORS.map((_, i) => {
   const el = document.createElement('i');
-  el.style.setProperty('--c', color);
+  el.style.setProperty('--c', COLORS[i][1]);
+  el.style.setProperty('--ink', ink(i + 1));
   $('shares').append(el);
   return el;
 });
 
+function covers(el) {
+  const r = el.getBoundingClientRect(), c = ctx.canvas.getBoundingClientRect();
+  return [...players.values()].some((p) => {
+    const x = c.left + (p.x / W) * c.width, y = c.top + (p.y / H) * c.height, pad = (BODY / W) * c.width;
+    return x > r.left - pad && x < r.right + pad && y > r.top - pad && y < r.bottom + pad;
+  });
+}
+
 function overlays() {
-  const full = players.size === room.slots;
-  $('join').classList.toggle('full', full);
+  document.body.classList.toggle('playing', players.size > 0);
+  $('join').classList.toggle('full', players.size === room.slots);
   $('count').textContent = `${players.size}/${room.slots}`;
   $('hint').hidden = players.size > 0;
   $('clock').hidden = !players.size && phase === 'play';
+  $('clock').classList.toggle('hurry', phase === 'play' && timeLeft <= 10);
   for (const el of [$('join'), $('clock')]) el.classList.toggle('peek', covers(el));
   const t = Math.ceil(phase === 'play' ? timeLeft : 0);
   $('clock').textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
@@ -280,7 +396,7 @@ function overlays() {
     const pct = players.has(i + 1) ? coverage(i + 1) : 0;
     el.hidden = !pct;
     el.style.width = `${pct}%`;
-    el.textContent = pct >= 4 ? `${pct}%` : '';
+    el.textContent = pct >= 3 ? `${pct}%` : '';
   });
 }
 
@@ -293,7 +409,7 @@ requestAnimationFrame(function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   update(dt);
-  render();
+  render(now / 1000);
   overlays();
   requestAnimationFrame(frame);
 });
