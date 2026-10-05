@@ -5,6 +5,9 @@ player scans it, and their phone becomes a controller. No accounts, no app
 install: one small self-hosted Node server and a few lines in your game. Made
 for local multiplayer and party games on a laptop or TV.
 
+**[Try it live: Paint Party](https://joinstick.fly.dev/demo/paint-party)**:
+open it on a big screen and scan the QR code with phones (1-8 players).
+
 [![npm](https://img.shields.io/npm/v/joinstick)](https://www.npmjs.com/package/joinstick)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![node >= 22](https://img.shields.io/badge/node-%3E%3D22-339933)](package.json)
@@ -43,7 +46,9 @@ same Wi-Fi, and press A. Embedding in your own Node server or using
 TypeScript: `npm i joinstick`. A complete example game is in
 [`examples/basic`](examples/basic).
 [`examples/paint-party`](examples/paint-party) is a party game for 1-8 phones
-that join and leave at any time through one QR code.
+that join and leave at any time through one QR code
+([play it live](https://joinstick.fly.dev/demo/paint-party): open it on a big
+screen, then scan the QR with phones).
 
 ### Using a bundler or your own dev server
 
