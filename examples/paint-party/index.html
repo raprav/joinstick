@@ -16,7 +16,6 @@
   h1 small { display: block; margin-top: 6px; color: #8a90a2; font-size: 14px; font-weight: 600; }
   .join { padding: 1.4vmin; border-radius: 16px; background: #fff; color: #101218; text-align: center; }
   .join img { display: block; width: 100%; aspect-ratio: 1; }
-  .join img:not([src]) { display: none; }
   .join b { display: block; font-size: clamp(18px, 2vw, 32px); }
   .join code { font-size: 13px; color: #555; word-break: break-all; }
   #clock { font-size: clamp(44px, 6vw, 104px); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -31,7 +30,7 @@
 <canvas id="arena" width="1920" height="1080"></canvas>
 <aside>
   <h1>Paint Party <small id="status"></small></h1>
-  <div class="join"><img id="qr" alt="QR code to join"><b id="join-label"></b><code id="join-url"></code></div>
+  <div class="join"><img id="qr" alt="QR code to join"><b>Scan to join</b><code id="join-url"></code></div>
   <div id="clock"></div>
   <div id="bars"></div>
 </aside>
@@ -59,8 +58,14 @@ const room = await host({
   },
 });
 const $ = (id) => document.getElementById(id);
-room.on('status', (s) => ($('status').textContent = s === 'connected' ? `Room ${room.code}` : s));
-$('status').textContent = `Room ${room.code}`;
+// One QR for everyone: each phone that scans it gets the first free slot.
+function showRoom(status = 'connected') {
+  $('status').textContent = status === 'connected' ? `Room ${room.code}` : status;
+  $('qr').src = room.qr();
+  $('join-url').textContent = room.joinUrl();
+}
+room.on('status', showRoom); // after a reconnect the code or join address may differ
+showRoom();
 
 // The floor: one byte per cell, 0 = white, n = player n. Painting also writes the
 // pixel and keeps a per-player count, so coverage is free every frame.
@@ -230,9 +235,7 @@ function render() {
   }
 }
 
-// Sidebar: the join QR always points at the first free slot, so one code on
-// screen is enough. Two phones scanning at the same instant: the second one is
-// offered the other free slots by the pad page.
+// Sidebar: clock and one coverage bar per player.
 const bars = COLORS.map(([, color]) => {
   const el = document.createElement('div');
   el.className = 'bar';
@@ -241,18 +244,8 @@ const bars = COLORS.map(([, color]) => {
   $('bars').append(el);
   return el;
 });
-let shownUrl;
 
 function sidebar() {
-  const free = Array.from({ length: room.slots }, (_, i) => i + 1).find((n) => !room.connected(n));
-  const url = free ? room.joinUrl(free) : '';
-  if (url !== shownUrl) {
-    shownUrl = url;
-    if (free) $('qr').src = room.qr(free);
-    else $('qr').removeAttribute('src');
-    $('join-label').textContent = free ? 'Scan to join' : `Game full: ${room.slots} players`;
-    $('join-url').textContent = url;
-  }
   const t = Math.ceil(phase === 'play' ? timeLeft : 0);
   $('clock').textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
   const best = Math.max(1, ...[...players.keys()].map((n) => counts[n]));
