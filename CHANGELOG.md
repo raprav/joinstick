@@ -21,6 +21,11 @@ is 0.x, a minor release may change the API; the changelog says how.
 - The pad's top bar is tinted and underlined in the pad color, so players can
   match their phone to the screen at a glance.
 
+### Fixed
+
+- `--static` redirects a directory requested without its trailing slash
+  (`/demo/game` -> `/demo/game/`, query kept) instead of answering 404.
+
 ## [0.1.0] - 2026-10-04
 
 First public release.

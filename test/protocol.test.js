@@ -395,7 +395,7 @@ test('http routes: SDKs, pad page, QR, llms.txt, static files, fallback handler'
   await srv.stop();
 });
 
-test('malformed upgrade URLs do not crash the server; dotfiles are never served', async () => {
+test('malformed upgrade URLs do not crash the server; dotfiles are never served; directories get their slash', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'joinstick-'));
   fs.writeFileSync(path.join(dir, '.env'), 'SECRET=1');
   fs.mkdirSync(path.join(dir, '.git'));
@@ -413,6 +413,15 @@ test('malformed upgrade URLs do not crash the server; dotfiles are never served'
   }
   for (const p of ['/.env', '/.git/config', '/%2eenv']) assert.equal((await fetch(srv.url + p)).status, 404, p);
   assert.equal((await fetch(srv.url + '/')).status, 200);
+
+  // A directory without its trailing slash redirects to it, keeping the query.
+  fs.mkdirSync(path.join(dir, 'demo', 'game'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'demo', 'game', 'index.html'), '<html>game');
+  const moved = await fetch(srv.url + '/demo/game?x=1', { redirect: 'manual' });
+  assert.equal(moved.status, 301);
+  assert.equal(new URL(moved.headers.get('location'), moved.url).href, srv.url + '/demo/game/?x=1');
+  assert.equal(await (await fetch(srv.url + '/demo/game')).text(), '<html>game');
+  assert.equal((await fetch(srv.url + '/demo', { redirect: 'manual' })).status, 404); // no index.html
   await srv.stop();
 });
 

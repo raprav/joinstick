@@ -411,10 +411,10 @@ export function attach(server, opts = {}) {
     return true;
   }
 
-  async function serveStatic(req, res, pathname) {
+  async function serveStatic(req, res, url) {
     let rel;
     try {
-      rel = decodeURIComponent(pathname);
+      rel = decodeURIComponent(url.pathname);
     } catch {
       return false;
     }
@@ -422,6 +422,12 @@ export function attach(server, opts = {}) {
     let file = path.resolve(staticDir, '.' + rel);
     if (file !== staticDir && !file.startsWith(staticDir + path.sep)) return false;
     if (rel.endsWith('/')) file = path.join(file, 'index.html');
+    else if ((await stat(path.join(file, 'index.html')).catch(() => null))?.isFile()) {
+      // A directory without its slash: /demo/game -> /demo/game/. A relative Location keeps
+      // a path like //host from turning into a redirect to another site.
+      res.writeHead(301, { location: `./${url.pathname.split('/').pop()}/${url.search}` }).end();
+      return true;
+    }
     return serveFile(req, res, file);
   }
 
@@ -449,7 +455,7 @@ export function attach(server, opts = {}) {
       res.end(renderSVG(`${room.joinBase}/j/${room.code}${slot === null ? '' : `/${n}`}`, { border: 2 }));
       return true;
     }
-    if (staticDir) return serveStatic(req, res, p);
+    if (staticDir) return serveStatic(req, res, url);
     return false;
   }
 
