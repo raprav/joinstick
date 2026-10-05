@@ -5,6 +5,22 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). While the version
 is 0.x, a minor release may change the API; the changelog says how.
 
+## [Unreleased]
+
+### Added
+
+- One QR for everyone: `room.qr()` and `room.joinUrl()` without a slot give a
+  link that puts each phone in the first free slot (`/j/ROOM`);
+  `/joinstick/qr.svg` accepts a missing `slot`.
+- `examples/paint-party`: a party game for 1-8 phones.
+
+### Changed
+
+- The player number on the pad's join form is optional; blank takes the first
+  free slot.
+- The pad's top bar is tinted and underlined in the pad color, so players can
+  match their phone to the screen at a glance.
+
 ## [0.1.0] - 2026-10-04
 
 First public release.
@@ -32,4 +48,5 @@ First public release.
 - JSON/WebSocket protocol v1 (PROTOCOL.md), AGENTS.md for coding agents,
   TypeScript declarations, Dockerfile.
 
+[Unreleased]: https://github.com/raprav/joinstick/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/raprav/joinstick/releases/tag/v0.1.0
