@@ -30,7 +30,7 @@ function showError(err, room, slot) {
   $('pad').hidden = true;
   const free = err.free ?? [];
   const messages = {
-    'slot-taken': [`Player ${slot} is taken`, free.length ? 'Pick a free spot:' : 'The game is full.', free.map((n) => [`Player ${n}`, go(`/j/${room}/${n}`)])],
+    'slot-taken': [slot ? `Player ${slot} is taken` : 'No free spot', free.length ? 'Pick a free spot:' : 'The game is full.', free.map((n) => [`Player ${n}`, go(`/j/${room}/${n}`)])],
     'room-not-found': ['Room not found', `There is no game with code ${room}. Check the code on the game screen.`, [['Enter another code', go('/j')]]],
     'bad-slot': ['No such player', `Room ${room} has no player ${slot}.`, [['Take a free spot', go(`/j/${room}`)]]],
     kicked: ['You were removed', 'The game disconnected this controller.', [['Join again', reload]]],
@@ -52,7 +52,8 @@ function showForm() {
   form.hidden = false;
   form.onsubmit = (e) => {
     e.preventDefault();
-    location.assign(`/j/${form.room.value.trim().toUpperCase()}/${form.slot.value}`);
+    const slot = form.slot.value; // blank: the first free slot
+    location.assign(`/j/${form.room.value.trim().toUpperCase()}${slot ? `/${slot}` : ''}`);
   };
 }
 
