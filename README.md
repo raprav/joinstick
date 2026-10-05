@@ -23,7 +23,7 @@ Save this as `my-game/index.html`:
 <script type="module">
   import { host } from '/joinstick/host.js';
   const room = await host({ slots: 2 });          // default pad: d-pad + A, B
-  document.getElementById('qr').src = room.qr(1); // player 1 scans this
+  document.getElementById('qr').src = room.qr();  // every player scans this
   (function frame() {
     const p1 = room.input(1);                     // { x, y, buttons, pressed }, never undefined
     if (p1.pressed.a) console.log('jump!');       // x, y in [-1, 1]; pressed = went down since last read
@@ -132,7 +132,7 @@ a button, tap another). Full schema in [AGENTS.md](AGENTS.md#5-layout).
 |---|---|
 | `host({ slots, layout, server })` | Create (or after a reload, resume) a room. `server` is the Joinstick URL when the game is served elsewhere. |
 | `room.input(n)` | `{ x, y, buttons, pressed }` for player `n`. Read it every frame. |
-| `room.qr(n)`, `room.joinUrl(n)` | QR image URL and plain join link for player `n`. |
+| `room.qr(n?)`, `room.joinUrl(n?)` | QR image URL and plain join link for player `n`. Without `n`: one link for everyone, each phone gets the first free slot. |
 | `room.connected(n)`, `room.on('join' \| 'leave', fn)` | Who is here; pause when someone drops. |
 | `room.pad(n, { title, color, highlight, disabled, vibrate })` | Change what a phone shows. |
 | `room.send(n, data)`, `room.broadcast(data)`, `room.on('message', fn)` | Custom messages both ways. |

@@ -52,6 +52,11 @@ export function host({ slots = 2, layout, server } = {}) {
     return state[n - 1];
   }
 
+  // '/n' or '&slot=n' for a valid slot; no n: the phone gets the first free slot.
+  function slotPart(n, prefix) {
+    return n === undefined ? '' : (at(n), `${prefix}${n}`);
+  }
+
   function neutral(s) {
     s.x = 0;
     s.y = 0;
@@ -167,8 +172,8 @@ export function host({ slots = 2, layout, server } = {}) {
         return out;
       },
       connected: (n) => at(n).connected,
-      qr: (n) => at(n) && `${base}/joinstick/qr.svg?room=${code}&slot=${n}`,
-      joinUrl: (n) => at(n) && `${joinBase}/j/${code}/${n}`,
+      qr: (n) => `${base}/joinstick/qr.svg?room=${code}${slotPart(n, '&slot=')}`,
+      joinUrl: (n) => `${joinBase}/j/${code}${slotPart(n, '/')}`,
       pad(n, patch) {
         at(n);
         const { vibrate, ...keep } = patch;

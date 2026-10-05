@@ -278,6 +278,10 @@ test('host SDK: pressed latch, neutral input on leave, slot checks', async () =>
   assert.throws(() => room.input(3), RangeError);
   assert.equal(room.qr(1), `${srv.url}/joinstick/qr.svg?room=${room.code}&slot=1`);
   assert.match(room.joinUrl(2), new RegExp(`/j/${room.code}/2$`));
+  // No slot: one link for everyone, the server hands out the first free slot.
+  assert.equal(room.qr(), `${srv.url}/joinstick/qr.svg?room=${room.code}`);
+  assert.match(room.joinUrl(), new RegExp(`/j/${room.code}$`));
+  assert.throws(() => room.qr(0), RangeError);
 
   const pad = await join({ server: srv.url, room: room.code.toLowerCase(), slot: 1, name: 'Ken' });
   assert.equal(pad.slot, 1);
@@ -375,11 +379,17 @@ test('http routes: SDKs, pad page, QR, llms.txt, static files, fallback handler'
   const { created } = await createRoom(srv.url);
   const qr = await get(`/joinstick/qr.svg?room=${created.room}&slot=2`);
   assert.equal(qr.headers.get('content-type'), 'image/svg+xml');
-  assert.match(await qr.text(), /^<svg/);
+  const svg = await qr.text();
+  assert.match(svg, /^<svg/);
+  const anySlot = await (await get(`/joinstick/qr.svg?room=${created.room}`)).text();
+  assert.match(anySlot, /^<svg/);
+  assert.notEqual(anySlot, svg); // a different (slot-less) URL inside
 
   assert.equal(await (await get('/protocol.test.js')).status, 200);
   // Unknown QR rooms and paths outside the static dir fall through to the app handler.
   assert.equal(await (await get('/joinstick/qr.svg?room=ZZZZ&slot=1')).text(), 'app');
+  assert.equal(await (await get(`/joinstick/qr.svg?room=${created.room}&slot=9`)).text(), 'app');
+  assert.equal(await (await get(`/joinstick/qr.svg?room=${created.room}&slot=`)).text(), 'app');
   assert.equal(await (await get('/..%2fpackage.json')).text(), 'app');
   assert.equal(await (await get('/%2e%2e/package.json')).text(), 'app');
   await srv.stop();

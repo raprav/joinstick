@@ -25,7 +25,7 @@ something else (see "Game served elsewhere" below).
 import { host } from '/joinstick/host.js';
 
 const room = await host({ slots: 2, layout: { stick: 'dpad', buttons: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }] } });
-for (let n = 1; n <= room.slots; n++) showQr(n, room.qr(n), room.joinUrl(n)); // <img src=qr> + the URL as text
+showQr(room.qr(), room.joinUrl()); // <img src=qr> + the URL as text; each phone gets the first free slot (room.qr(n): a fixed slot)
 
 function tick() {
   for (let n = 1; n <= room.slots; n++) {
@@ -185,8 +185,8 @@ room.code                 // 'KQZX' (4 consonants)
 room.slots; room.status   // 'connecting' | 'connected' | 'reconnecting' | 'closed'
 room.input(n)             // see section 4
 room.connected(n)         // boolean
-room.qr(n)                // URL of an SVG QR code for <img src>
-room.joinUrl(n)           // the URL inside the QR: show it as text too
+room.qr(n?)               // URL of an SVG QR code for <img src>; no n: first free slot
+room.joinUrl(n?)          // the URL inside the QR: show it as text too
 room.pad(n, patch)        // section 6
 room.kick(n)              // disconnect that phone; it gets a "removed" screen
 room.send(n, data)        // any JSON to one phone (custom controllers)
@@ -254,8 +254,8 @@ Append `?name=Ana` to a join URL to give the player a name (shown to the host
 in the `join` event).
 
 Routes: WebSocket `/joinstick/ws`; SDKs `/joinstick/host.js`,
-`/joinstick/client.js` (CORS `*`); pad page `/j` and `/j/ROOM/SLOT`; QR
-`/joinstick/qr.svg?room=&slot=` (existing rooms only); `/llms.txt`.
+`/joinstick/client.js` (CORS `*`); pad page `/j`, `/j/ROOM` (first free slot) and `/j/ROOM/SLOT`; QR
+`/joinstick/qr.svg?room=&slot=` (existing rooms only, slot optional); `/llms.txt`.
 
 ### Game served elsewhere (Vite, another port)
 

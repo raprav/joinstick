@@ -100,8 +100,10 @@ The pad gets fatal `kicked`; the host gets `leave` with reason `kicked`.
 {"t":"created","room":"KQZX","hostToken":"9f…32 hex","joinBase":"http://192.168.1.20:3000","layout":{…validated…},"slots":[{"slot":1,"connected":false,"name":""}]}
 ```
 
-Pads join at `${joinBase}/j/${room}/${slot}`. The QR for a slot is
-`/joinstick/qr.svg?room=KQZX&slot=1` on the Joinstick server.
+Pads join at `${joinBase}/j/${room}/${slot}`, or at `${joinBase}/j/${room}` to
+get the first free slot. The QR for a slot is
+`/joinstick/qr.svg?room=KQZX&slot=1` on the Joinstick server; without `slot`
+it encodes the slot-less link.
 
 ### `join`
 

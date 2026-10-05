@@ -90,10 +90,10 @@ export interface Room {
   /** Current input of slot n (1-based). Never undefined: neutral when the slot is empty. Clears `pressed`. Throws RangeError for a bad slot. */
   input(n: number): Input;
   connected(n: number): boolean;
-  /** URL of an SVG QR code that opens the pad for slot n. Use as <img src>. */
-  qr(n: number): string;
-  /** The URL inside the QR. Show it as text under the QR. */
-  joinUrl(n: number): string;
+  /** URL of an SVG QR code that opens the pad for slot n. Use as <img src>. Without n, every phone that scans it gets the first free slot. */
+  qr(n?: number): string;
+  /** The URL inside the QR. Show it as text under the QR. Without n: the first-free-slot link. */
+  joinUrl(n?: number): string;
   pad(n: number, patch: PadPatch): void;
   /** Disconnect the phone in slot n; the slot becomes free. */
   kick(n: number): void;

@@ -442,10 +442,11 @@ export function attach(server, opts = {}) {
     if (p === '/llms.txt') return serveFile(req, res, path.join(ROOT, 'llms.txt'), cors);
     if (p === '/joinstick/qr.svg') {
       const room = rooms.get((url.searchParams.get('room') ?? '').toUpperCase());
-      const slot = Number(url.searchParams.get('slot'));
-      if (!room || !Number.isInteger(slot) || slot < 1 || slot > room.slots.length) return false;
+      const slot = url.searchParams.get('slot'); // no slot: the link gives the first free one
+      const n = Number(slot);
+      if (!room || (slot !== null && (!Number.isInteger(n) || n < 1 || n > room.slots.length))) return false;
       res.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'no-store', ...cors });
-      res.end(renderSVG(`${room.joinBase}/j/${room.code}/${slot}`, { border: 2 }));
+      res.end(renderSVG(`${room.joinBase}/j/${room.code}${slot === null ? '' : `/${n}`}`, { border: 2 }));
       return true;
     }
     if (staticDir) return serveStatic(req, res, p);

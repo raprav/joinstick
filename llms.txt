@@ -13,7 +13,7 @@ Full guide: AGENTS.md. Wire format: PROTOCOL.md. Types: /joinstick/host.d.ts, /j
 ```js
 import { host } from '/joinstick/host.js';
 const room = await host({ slots: 2, layout: { stick: 'dpad', buttons: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }] } });
-// show <img src={room.qr(n)}> and the text room.joinUrl(n) for n = 1..room.slots
+// show <img src={room.qr()}> and the text room.joinUrl(): each phone that scans it gets the first free slot (room.qr(n) for a fixed slot)
 function tick() {
   for (let n = 1; n <= room.slots; n++) {
     const { x, y, buttons, pressed } = room.input(n); // once per frame per slot
@@ -56,7 +56,7 @@ A locked/backgrounded phone leaves immediately and rejoins its slot when back (j
 
 ## Host API
 
-room.code, room.slots, room.status ('connecting'|'connected'|'reconnecting'|'closed'), room.input(n), room.connected(n), room.qr(n), room.joinUrl(n), room.pad(n, { title?, color?, highlight?: ids (glow and make the phone vibrate briefly (Android only); disabled wins over highlight), disabled?: ids, vibrate?: ms }), room.kick(n), room.send(n, data), room.broadcast(data), room.on('join'|'leave'|'message'|'status'|'error', fn) → unsubscribe, room.close().
+room.code, room.slots, room.status ('connecting'|'connected'|'reconnecting'|'closed'), room.input(n), room.connected(n), room.qr(n?), room.joinUrl(n?) (no n: first free slot), room.pad(n, { title?, color?, highlight?: ids (glow and make the phone vibrate briefly (Android only); disabled wins over highlight), disabled?: ids, vibrate?: ms }), room.kick(n), room.send(n, data), room.broadcast(data), room.on('join'|'leave'|'message'|'status'|'error', fn) → unsubscribe, room.close().
 
 ## Client API (custom controllers, remote players)
 
