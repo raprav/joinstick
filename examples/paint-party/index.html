@@ -70,7 +70,7 @@ const BODY = 46, BRUSH = 30, BOMB = 130;       // radius in px
 const FONT = 'ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", system-ui, sans-serif';
 // Every pair stays apart (CIELAB distance >= 17) under simulated protanopia,
 // deuteranopia and tritanopia; the first four are the most distinct.
-const COLORS = [['Red', '#d55e00'], ['Blue', '#1f5fd6'], ['Yellow', '#f2b705'], ['Green', '#0e9f6e'],
+const COLORS = [['Orange', '#d55e00'], ['Blue', '#1f5fd6'], ['Yellow', '#f2b705'], ['Green', '#0e9f6e'],
                 ['Pink', '#e85aa8'], ['Sky', '#38b6f0'], ['Black', '#2b2d42'], ['Brown', '#8a5a2b']];
 const RGB = COLORS.map(([, hex]) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)));
 const shade = (n, k) => `rgb(${RGB[n - 1].map((c) => Math.round(c * k))})`; // k < 1: darker
@@ -332,14 +332,15 @@ function drawBlob(n, p, t) {
 }
 
 function drawResults() {
-  const [{ n, pct }] = results, cx = W / 2, cy = H / 2;
+  const [{ n, pct }, second] = results, cx = W / 2, cy = H / 2;
+  const tie = second?.pct === pct; // equal as shown is a tie
   ctx.globalAlpha = 0.88 * Math.min(1, (BREAK - breakLeft) / 0.8); // the winner's colour floods in
   ctx.fillStyle = COLORS[n - 1][1];
   ctx.fillRect(0, 0, W, H);
   ctx.globalAlpha = 1;
   drawBits(['confetti']);
-  text(`${COLORS[n - 1][0]} wins!`, cx, cy - 170, 170, ink(n));
-  text(`${pct}% of the floor`, cx, cy - 40, 60, ink(n));
+  text(tie ? 'Tie!' : `${COLORS[n - 1][0]} wins!`, cx, cy - 170, 170, ink(n));
+  text(`${pct}% of the floor${tie ? ' each' : ''}`, cx, cy - 40, 60, ink(n));
   results.forEach((r, i) => { // ranking: a pill per colour, four per row
     const inRow = Math.min(4, results.length - i + (i % 4));
     const x = cx + ((i % 4) - (inRow - 1) / 2) * 330, y = cy + 60 + Math.floor(i / 4) * 76;
